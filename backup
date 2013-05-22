@@ -1,0 +1,176 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+		This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+
+import os
+import sys
+import time
+import pynotify
+
+from xml.dom import minidom
+from optparse import OptionParser
+
+options = ""
+backup_files = []
+target = ""
+pipeline = {}
+postgres = []
+pre_backup_script = ""
+post_backup_script = ""
+
+def send_notification(message):
+	"""send feed updates to notify-osd"""   
+	pynotify.init('Backup')
+	n = pynotify.Notification('Backup', message, 'deja-dup')
+	n.set_hint_string('x-canonical-append','')
+	n.show()
+
+def load_config(config_path):
+	global options
+	global target
+	global backup_files
+	global pipeline
+	global postgres
+	global pre_backup_script
+	global post_backup_script
+
+	key = False
+	first = False
+
+	xmldoc = minidom.parse(config_path)
+	optionlist = xmldoc.getElementsByTagName("option")
+	for s in optionlist:
+		if s.attributes['name'].value == "rsync_options" and s.firstChild != None:
+			options = s.firstChild.data
+		elif s.attributes['name'].value == "source" and s.firstChild != None:
+			source = s.firstChild.data
+		elif s.attributes['name'].value == "target" and s.firstChild != None:
+			target = s.firstChild.data
+		elif s.attributes['name'].value == "pre_backup_script" and s.firstChild != None:
+			pre_backup_script = s.firstChild.data
+		elif s.attributes['name'].value == "post_backup_script" and s.firstChild != None:
+			post_backup_script = s.firstChild.data
+
+	backup_files_list = xmldoc.getElementsByTagName('backup_file')
+	for s in backup_files_list:
+		if s.firstChild != None:
+			backup_files.append(s.firstChild.data.split('| '))
+
+	pipelinelist = xmldoc.getElementsByTagName("pipe")
+	for s in pipelinelist:
+		pipeline[int(s.attributes['name'].value)] = s.firstChild.data
+
+	postgreslist = xmldoc.getElementsByTagName("pgdb")
+	for s in postgreslist:
+		pgdb = {}
+		for child in s.childNodes:
+			if child.nodeName == "name":
+				pgdb["name"] = child.firstChild.data
+			elif child.nodeName == "user":
+				pgdb["user"] = child.firstChild.data
+			elif child.nodeName == "password":
+				pgdb["password"] = child.firstChild.data if child.firstChild != None else ''
+			elif child.nodeName == "target":
+				pgdb["target"] = child.firstChild.data
+
+		postgres.append(pgdb)
+
+	if not target:
+		print "No target provided."
+		sys.exit(1)
+
+	if len(pipeline) == 0:
+		pipeline[1] = "backup"
+
+
+
+def backup():
+	print "--------------------------------------------------"
+	for files in backup_files:
+		send_notification('Start backup of \'' + files[0] + '\'.')
+
+		if os.path.isdir(files[0]):
+			if not os.path.exists(os.path.dirname(target + files[0])):
+				os.makedirs(os.path.dirname(target + files[0]))
+
+			exclude=''
+			for ex in files[1:]:
+				exclude = exclude + ' --exclude=' + ex
+
+			os.system("rsync %s %s %s %s" % (options, exclude, files[0] + '/', target + files[0]))
+		else:
+			dirname = os.path.dirname(files[0])
+			if not os.path.exists(os.path.dirname(target + dirname)):
+				os.makedirs(os.path.dirname(target + dirname))
+
+			os.system("rsync %s %s %s" % (options, files[0], target + dirname))
+
+	print "--------------------------------------------------"
+
+def run_pre_backup_script():
+	if not pre_backup_script:
+		return
+
+	print "--------------------------------------------------"
+	out = subprocess.Popen(pre_backup_script, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+	print out.stdout.read()
+	print "--------------------------------------------------"
+
+def run_post_backup_script():
+	if not post_backup_script:
+		return
+
+	print "--------------------------------------------------"
+	out = subprocess.Popen(post_backup_script, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+	print out.stdout.read()
+	print "--------------------------------------------------"
+
+def postgres_dump():
+	global postgres
+
+	print "--------------------------------------------------"
+	print "Start backup of PostgreSQL databases."
+	send_notification('Start backup of PostgreSQL databases.')
+
+	timestamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
+	for pgdb in postgres:
+		os.system("PGPASSWORD=%s pg_dump --username=%s -Fp %s | gzip -c > %s" % (pgdb["password"], pgdb["user"], pgdb["name"], os.path.join(pgdb["target"], "%s_%s.sql.gz" % (pgdb["name"], timestamp))))
+	print "--------------------------------------------------"
+
+def run():
+	global pipeline
+
+	usage = "usage: %prog [options] config_path"
+	parser = OptionParser(usage)
+	(options, args) = parser.parse_args()
+
+	if len(args) != 1:
+		parser.print_help()
+
+	load_config(args[0])
+	for k, v in sorted(pipeline.iteritems()):
+		if v == "backup":
+			backup()
+		elif v == "postgres_dump":
+			postgres_dump()
+		elif v == "pre_backup_script":
+			run_pre_backup_script()
+		elif v == "post_backup_script":
+			run_post_backup_script()
+
+if __name__ == "__main__":
+	run()

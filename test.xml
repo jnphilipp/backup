@@ -1,0 +1,14 @@
+<dup>
+	<options>
+		<option name="source">/</option>
+		<option name="target">/home/jnphilipp/tmp/backup</option>
+		<option name="rsync_options">--delete -aucPz</option>
+	</options>
+	<backup_files>
+		<backup_file>/home/jnphilipp/Documents/Texte, epub, *.odt</backup_file>
+		<backup_file>/var/www, Library</backup_file>
+	</backup_files>
+	<pipeline>
+		<pipe name="2">backup</pipe>
+	</pipeline>
+</dup>
