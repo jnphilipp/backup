@@ -33,11 +33,14 @@ pre_backup_script = ""
 post_backup_script = ""
 
 def send_notification(message):
-	"""send feed updates to notify-osd"""   
-	pynotify.init('Backup')
-	n = pynotify.Notification('Backup', message, 'deja-dup')
-	n.set_hint_string('x-canonical-append','')
-	n.show()
+	"""send feed updates to notify-osd"""
+	try:
+		pynotify.init('Backup')
+		n = pynotify.Notification('Backup', message, 'deja-dup')
+		n.set_hint_string('x-canonical-append','')
+		n.show()
+	except:
+		print message
 
 def load_config(config_path):
 	global options
@@ -68,7 +71,12 @@ def load_config(config_path):
 	backup_files_list = xmldoc.getElementsByTagName('backup_file')
 	for s in backup_files_list:
 		if s.firstChild != None:
-			backup_files.append(s.firstChild.data.split('| '))
+			backup_file = [s.firstChild.data.strip()]
+			for child in s.childNodes:
+				if child.firstChild != None:
+					backup_file.append(child.firstChild.data.strip())
+
+			backup_files.append(backup_file)
 
 	pipelinelist = xmldoc.getElementsByTagName("pipe")
 	for s in pipelinelist:
@@ -102,16 +110,19 @@ def backup():
 	print "--------------------------------------------------"
 	for files in backup_files:
 		send_notification('Start backup of \'' + files[0] + '\'.')
+		print 'Backup of: ' + files [0]
+		print 'Exclude: ' + ', '.join(str(x) for x in files[1:])
 
-		if os.path.isdir(files[0]):
-			if not os.path.exists(os.path.dirname(target + files[0])):
-				os.makedirs(os.path.dirname(target + files[0]))
+		folder = files[0][files[0].index(':') + 1:] if files[0].startswith('ssh ') else files[0]
+		if os.path.isdir(folder) or files[0].startswith('ssh '):
+			if not os.path.exists(os.path.dirname(target + folder)):
+				os.makedirs(os.path.dirname(target + folder))
 
 			exclude=''
 			for ex in files[1:]:
 				exclude = exclude + ' --exclude=' + ex
 
-			os.system("rsync %s %s %s %s" % (options, exclude, files[0] + '/', target + files[0]))
+			os.system("rsync %s %s %s %s" % (options, exclude, files[0] + '/', target + folder))
 		else:
 			dirname = os.path.dirname(files[0])
 			if not os.path.exists(os.path.dirname(target + dirname)):
@@ -135,8 +146,8 @@ def run_post_backup_script():
 		return
 
 	print "--------------------------------------------------"
-	out = subprocess.Popen(post_backup_script, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-	print out.stdout.read()
+	send_notification('Start post backup script.')
+	os.system(post_backup_script)
 	print "--------------------------------------------------"
 
 def postgres_dump():

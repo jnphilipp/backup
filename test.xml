@@ -1,14 +1,22 @@
-<dup>
+<backup>
 	<options>
 		<option name="source">/</option>
 		<option name="target">/home/jnphilipp/tmp/backup</option>
 		<option name="rsync_options">--delete -aucPz</option>
 	</options>
 	<backup_files>
-		<backup_file>/home/jnphilipp/Documents/Texte, epub, *.odt</backup_file>
-		<backup_file>/var/www, Library</backup_file>
+		<backup_file>/home/jnphilipp/Documents/Texte
+			<exclude>epub</exclude>
+			<exclude>*.odt</exclude>
+		</backup_file>
+		<backup_file>/home/jnphilipp/Documents/sons
+			<exclude>'not importand'</exclude>
+		</backup_file>
+		<backup_file>/var/www
+			<exclude>Library</exclude>
+		</backup_file>
 	</backup_files>
 	<pipeline>
 		<pipe name="2">backup</pipe>
 	</pipeline>
-</dup>
+</backup>
