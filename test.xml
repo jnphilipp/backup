@@ -1,7 +1,7 @@
 <backup>
 	<options>
 		<option name="source">/</option>
-		<option name="target">/home/jnphilipp/tmp/backup</option>
+		<option name="target">/media/backup</option>
 		<option name="rsync_options">--delete -aucPz</option>
 	</options>
 	<backup_files>

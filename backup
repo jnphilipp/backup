@@ -20,11 +20,20 @@ import os
 import sys
 import time
 import pynotify
+import ConfigParser
 
 from xml.dom import minidom
 from optparse import OptionParser
+from collections import OrderedDict
 
-options = ""
+class MultiOrderedDict(OrderedDict):
+	def __setitem__(self, key, value):
+		if isinstance(value, list) and key in self:
+			self[key].extend(value)
+		else:
+			super(OrderedDict, self).__setitem__(key, value)
+
+rsync_options = ""
 backup_files = []
 target = ""
 pipeline = {}
@@ -42,8 +51,8 @@ def send_notification(message):
 	except:
 		print message
 
-def load_config(config_path):
-	global options
+def load_xml(path):
+	global rsync_options
 	global target
 	global backup_files
 	global pipeline
@@ -51,21 +60,16 @@ def load_config(config_path):
 	global pre_backup_script
 	global post_backup_script
 
-	key = False
-	first = False
-
-	xmldoc = minidom.parse(config_path)
-	optionlist = xmldoc.getElementsByTagName("option")
+	xmldoc = minidom.parse(path)
+	optionlist = xmldoc.getElementsByTagName('option')
 	for s in optionlist:
-		if s.attributes['name'].value == "rsync_options" and s.firstChild != None:
-			options = s.firstChild.data
-		elif s.attributes['name'].value == "source" and s.firstChild != None:
-			source = s.firstChild.data
-		elif s.attributes['name'].value == "target" and s.firstChild != None:
+		if s.attributes['name'].value == 'rsync_options' and s.firstChild != None:
+			rsync_options = s.firstChild.data
+		elif s.attributes['name'].value == 'target' and s.firstChild != None:
 			target = s.firstChild.data
-		elif s.attributes['name'].value == "pre_backup_script" and s.firstChild != None:
+		elif s.attributes['name'].value == 'pre_backup_script' and s.firstChild != None:
 			pre_backup_script = s.firstChild.data
-		elif s.attributes['name'].value == "post_backup_script" and s.firstChild != None:
+		elif s.attributes['name'].value == 'post_backup_script' and s.firstChild != None:
 			post_backup_script = s.firstChild.data
 
 	backup_files_list = xmldoc.getElementsByTagName('backup_file')
@@ -78,22 +82,24 @@ def load_config(config_path):
 
 			backup_files.append(backup_file)
 
-	pipelinelist = xmldoc.getElementsByTagName("pipe")
+	pipelinelist = xmldoc.getElementsByTagName('pipe')
 	for s in pipelinelist:
 		pipeline[int(s.attributes['name'].value)] = s.firstChild.data
 
-	postgreslist = xmldoc.getElementsByTagName("pgdb")
+	postgreslist = xmldoc.getElementsByTagName('pgdb')
 	for s in postgreslist:
 		pgdb = {}
 		for child in s.childNodes:
-			if child.nodeName == "name":
-				pgdb["name"] = child.firstChild.data
-			elif child.nodeName == "user":
-				pgdb["user"] = child.firstChild.data
-			elif child.nodeName == "password":
-				pgdb["password"] = child.firstChild.data if child.firstChild != None else ''
-			elif child.nodeName == "target":
-				pgdb["target"] = child.firstChild.data
+			if child.nodeName == 'name':
+				pgdb['name'] = child.firstChild.data
+			elif child.nodeName == 'user':
+				pgdb['user'] = child.firstChild.data
+			elif child.nodeName == 'password':
+				pgdb['password'] = child.firstChild.data if child.firstChild != None else ''
+			elif child.nodeName == 'target':
+				pgdb['target'] = child.firstChild.data
+			elif child.nodeName == 'options':
+				pgdb['options'] = child.firstChild.data
 
 		postgres.append(pgdb)
 
@@ -104,14 +110,71 @@ def load_config(config_path):
 	if len(pipeline) == 0:
 		pipeline[1] = "backup"
 
+def load_properties(path):
+	global rsync_options
+	global target
+	global backup_files
+	global pipeline
+	global postgres
+	global pre_backup_script
+	global post_backup_script
+
+	config = ConfigParser.RawConfigParser(dict_type=MultiOrderedDict)
+	config.read([path])
+
+	if config.has_section('options'):
+		if config.has_option('options', 'target'):
+			target = config.get('options', 'target')[0]
+		if config.has_option('options', 'rsync_options'):
+			rsync_options = config.get('options', 'rsync_options')[0]
+		if config.has_option('options', 'pre_backup_script'):
+			pre_backup_script = config.get('options', 'pre_backup_script')[0]
+		if config.has_option('options', 'post_backup_script'):
+			post_backup_script = config.get('options', 'post_backup_script')[0]
+
+	i = 1
+	while config.has_section('backup%d' % i):
+		backup_file = [config.get('backup%d' % i, 'source')[0]]
+		if config.has_option('backup%d' % i, 'exclude'):
+			backup_file.extend(config.get('backup%d' % i, 'exclude'))
+		i += 1
+
+	i = 1
+	while config.has_section('pgdb%d' % i):
+		pgdb = {}
+
+		if config.has_option('pgdb%d' % i, 'name'):
+			pgdb['name'] = config.get('pgdb%d' % i, 'name')[0]
+		if config.has_option('pgdb%d' % i, 'user'):
+			pgdb['user'] = config.get('pgdb%d' % i, 'user')[0]
+		if config.has_option('pgdb%d' % i, 'password'):
+			pgdb['password'] = config.get('pgdb%d' % i, 'password')[0]
+		if config.has_option('pgdb%d' % i, 'options'):
+			pgdb['options'] = config.get('pgdb%d' % i, 'options')[0]
+		if config.has_option('pgdb%d' % i, 'target'):
+			pgdb['target'] = config.get('pgdb%d' % i, 'target')[0]
+		i += 1
+
+	if config.has_section('pipeline'):
+		i = 1
+		while config.has_option('pipeline', str(i)):
+			pipeline[i] = config.get('pipeline', str(i))[0]
+			i += 1
+
+	if not target:
+		print "No target provided."
+		sys.exit(1)
+
+	if len(pipeline) == 0:
+		pipeline[1] = "backup"
 
 
 def backup():
 	print "--------------------------------------------------"
 	for files in backup_files:
-		send_notification('Start backup of \'' + files[0] + '\'.')
-		print 'Backup of: ' + files [0]
-		print 'Exclude: ' + ', '.join(str(x) for x in files[1:])
+		send_notification("Start backup of '%s'." % files[0])
+		print "Backup of: " + files [0]
+		print "Exclude: " + ", ".join(str(x) for x in files[1:])
 
 		folder = files[0][files[0].index(':') + 1:] if files[0].startswith('ssh ') else files[0]
 		if os.path.isdir(folder) or files[0].startswith('ssh '):
@@ -122,13 +185,13 @@ def backup():
 			for ex in files[1:]:
 				exclude = exclude + ' --exclude=' + ex
 
-			os.system("rsync %s %s %s %s" % (options, exclude, files[0] + '/', target + folder))
+			os.system("rsync %s %s %s %s" % (rsync_options, exclude, files[0] + '/', target + folder))
 		else:
 			dirname = os.path.dirname(files[0])
 			if not os.path.exists(os.path.dirname(target + dirname)):
 				os.makedirs(os.path.dirname(target + dirname))
 
-			os.system("rsync %s %s %s" % (options, files[0], target + dirname))
+			os.system("rsync %s %s %s" % (rsync_options, files[0], target + dirname))
 
 	print "--------------------------------------------------"
 
@@ -137,8 +200,7 @@ def run_pre_backup_script():
 		return
 
 	print "--------------------------------------------------"
-	out = subprocess.Popen(pre_backup_script, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-	print out.stdout.read()
+	os.system(pre_backup_script)
 	print "--------------------------------------------------"
 
 def run_post_backup_script():
@@ -146,7 +208,7 @@ def run_post_backup_script():
 		return
 
 	print "--------------------------------------------------"
-	send_notification('Start post backup script.')
+	send_notification("Start post backup script.")
 	os.system(post_backup_script)
 	print "--------------------------------------------------"
 
@@ -155,33 +217,38 @@ def postgres_dump():
 
 	print "--------------------------------------------------"
 	print "Start backup of PostgreSQL databases."
-	send_notification('Start backup of PostgreSQL databases.')
+	send_notification("Start backup of PostgreSQL databases.")
 
 	timestamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
 	for pgdb in postgres:
-		os.system("PGPASSWORD=%s pg_dump --username=%s -Fp %s | gzip -c > %s" % (pgdb["password"], pgdb["user"], pgdb["name"], os.path.join(pgdb["target"], "%s_%s.sql.gz" % (pgdb["name"], timestamp))))
+		os.system("PGPASSWORD=%s pg_dump --username=%s %s %s | gzip -c > %s" % (pgdb['password'], pgdb['user'], pgdb['options'], pgdb['name'], os.path.join(pgdb['target'], "%s_%s.sql.gz" % (pgdb['name'], timestamp))))
 	print "--------------------------------------------------"
 
 def run():
 	global pipeline
 
-	usage = "usage: %prog [options] config_path"
+	usage = "usage: %prog [options]"
 	parser = OptionParser(usage)
+	parser.add_option('-x', '--xml', action='store', type='string', dest='xml')
+	parser.add_option('-p', '--properties', action='store', type='string', dest='properties')
 	(options, args) = parser.parse_args()
 
-	if len(args) != 1:
+	if options.xml != None:
+		load_xml(options.xml)
+	elif options.properties != None:
+		load_properties(options.properties)
+	else:
 		parser.print_help()
 
-	load_config(args[0])
 	for k, v in sorted(pipeline.iteritems()):
-		if v == "backup":
+		if v == 'backup':
 			backup()
-		elif v == "postgres_dump":
+		elif v == 'postgres_dump':
 			postgres_dump()
-		elif v == "pre_backup_script":
+		elif v == 'pre_backup_script':
 			run_pre_backup_script()
-		elif v == "post_backup_script":
+		elif v == 'post_backup_script':
 			run_post_backup_script()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
 	run()
