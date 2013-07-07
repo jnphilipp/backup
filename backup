@@ -231,6 +231,7 @@ def run():
 	parser = OptionParser(usage)
 	parser.add_option('-x', '--xml', action='store', type='string', dest='xml')
 	parser.add_option('-p', '--properties', action='store', type='string', dest='properties')
+	parser.add_option("-n", "--no-postgres", action="store_true", dest="postgres", help="disables PostgreSQL dump")
 	(options, args) = parser.parse_args()
 
 	if options.xml != None:
@@ -243,7 +244,7 @@ def run():
 	for k, v in sorted(pipeline.iteritems()):
 		if v == 'backup':
 			backup()
-		elif v == 'postgres_dump':
+		elif v == 'postgres_dump' and not options.postgres:
 			postgres_dump()
 		elif v == 'pre_backup_script':
 			run_pre_backup_script()
