@@ -40,6 +40,8 @@ pipeline = {}
 postgres = []
 pre_backup_script = ""
 post_backup_script = ""
+del_old_dumps=False
+max_dumps = 10
 
 def send_notification(message):
 	"""send feed updates to notify-osd"""
@@ -59,6 +61,8 @@ def load_xml(path):
 	global postgres
 	global pre_backup_script
 	global post_backup_script
+	global del_old_dumps
+	global max_dumps
 
 	xmldoc = minidom.parse(path)
 	optionlist = xmldoc.getElementsByTagName('option')
@@ -71,6 +75,10 @@ def load_xml(path):
 			pre_backup_script = s.firstChild.data
 		elif s.attributes['name'].value == 'post_backup_script' and s.firstChild != None:
 			post_backup_script = s.firstChild.data
+		elif s.attributes['name'].value == 'max_dumps' and s.firstChild != None:
+			max_dumps = int(s.firstChild.data)
+		elif s.attributes['name'].value == 'delete_old_dumps' and s.firstChild != None:
+			del_old_dumps = s.firstChild.data in ['true', 'True', 't', 'y', 'yes']
 
 	backup_files_list = xmldoc.getElementsByTagName('backup_file')
 	for s in backup_files_list:
@@ -118,6 +126,8 @@ def load_properties(path):
 	global postgres
 	global pre_backup_script
 	global post_backup_script
+	global del_old_dumps
+	global max_dumps
 
 	config = ConfigParser.RawConfigParser(dict_type=MultiOrderedDict)
 	config.read([path])
@@ -131,12 +141,18 @@ def load_properties(path):
 			pre_backup_script = config.get('options', 'pre_backup_script')[0]
 		if config.has_option('options', 'post_backup_script'):
 			post_backup_script = config.get('options', 'post_backup_script')[0]
+		if config.has_option('options', 'delete_old_dumps'):
+			del_old_dumps = config.get('options', 'delete_old_dumps')[0] in ['true', 'True', 't', 'y', 'yes']
+		if config.has_option('options', 'max_dumps'):
+			max_dumps = int(config.get('options', 'max_dumps')[0])
 
 	i = 1
 	while config.has_section('backup%d' % i):
 		backup_file = [config.get('backup%d' % i, 'source')[0]]
 		if config.has_option('backup%d' % i, 'exclude'):
 			backup_file.extend(config.get('backup%d' % i, 'exclude'))
+
+		backup_files.append(backup_file)
 		i += 1
 
 	i = 1
@@ -214,6 +230,7 @@ def run_post_backup_script():
 
 def postgres_dump():
 	global postgres
+	global del_old_dumps
 
 	print "--------------------------------------------------"
 	print "Start backup of PostgreSQL databases."
@@ -222,7 +239,29 @@ def postgres_dump():
 	timestamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
 	for pgdb in postgres:
 		os.system("PGPASSWORD=%s pg_dump --username=%s %s %s | gzip -c > %s" % (pgdb['password'], pgdb['user'], pgdb['options'], pgdb['name'], os.path.join(pgdb['target'], "%s_%s.sql.gz" % (pgdb['name'], timestamp))))
+
+		if del_old_dumps:
+			delete_old_dumps(pgdb['target'])
 	print "--------------------------------------------------"
+
+def delete_old_dumps(folder):
+	global max_dumps
+
+	if len([f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]) > max_dumps:
+		files = sorted(os.listdir(folder), reverse=True)
+		j = 1
+		for i in xrange(len(files) - 1):
+			if j >= max_dumps:
+				os.remove(os.path.join(folder, files[i]))
+				continue
+
+			if os.system("zcmp -s %s %s" % (os.path.join(folder, files[i]), os.path.join(folder, files[i + 1]))) > 0:
+				os.remove(os.path.join(folder, files[i]))
+			else:
+				j += 1
+
+			if len([f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]) <= max_dumps:
+				break
 
 def run():
 	global pipeline
