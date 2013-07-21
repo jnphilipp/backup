@@ -65,28 +65,39 @@ def load_xml(path):
 	global max_dumps
 
 	xmldoc = minidom.parse(path)
-	optionlist = xmldoc.getElementsByTagName('option')
+	optionlist = xmldoc.getElementsByTagName('options')
 	for s in optionlist:
-		if s.attributes['name'].value == 'rsync_options' and s.firstChild != None:
-			rsync_options = s.firstChild.data
-		elif s.attributes['name'].value == 'target' and s.firstChild != None:
-			target = s.firstChild.data
-		elif s.attributes['name'].value == 'pre_backup_script' and s.firstChild != None:
-			pre_backup_script = s.firstChild.data
-		elif s.attributes['name'].value == 'post_backup_script' and s.firstChild != None:
-			post_backup_script = s.firstChild.data
-		elif s.attributes['name'].value == 'max_dumps' and s.firstChild != None:
-			max_dumps = int(s.firstChild.data)
-		elif s.attributes['name'].value == 'delete_old_dumps' and s.firstChild != None:
-			del_old_dumps = s.firstChild.data in ['true', 'True', 't', 'y', 'yes']
+		for child in s.childNodes:
+			if child.firstChild != None:
+				if child.attributes['name'].value == 'rsync_options' and child.firstChild != None:
+					rsync_options = child.firstChild.data
+				elif child.attributes['name'].value == 'target' and child.firstChild != None:
+					target = child.firstChild.data
+				elif child.attributes['name'].value == 'pre_backup_script' and child.firstChild != None:
+					pre_backup_script = child.firstChild.data
+				elif child.attributes['name'].value == 'post_backup_script' and child.firstChild != None:
+					post_backup_script = child.firstChild.data
+				elif child.attributes['name'].value == 'max_dumps' and child.firstChild != None:
+					max_dumps = int(child.firstChild.data)
+				elif child.attributes['name'].value == 'delete_old_dumps' and child.firstChild != None:
+					del_old_dumps = child.firstChild.data in ['true', 'True', 't', 'y', 'yes']
 
 	backup_files_list = xmldoc.getElementsByTagName('backup_file')
 	for s in backup_files_list:
 		if s.firstChild != None:
-			backup_file = [s.firstChild.data.strip()]
+			backup_file = {'source':s.firstChild.data.strip()}
+
+			i = 0
 			for child in s.childNodes:
-				if child.firstChild != None:
-					backup_file.append(child.firstChild.data.strip())
+				if child.nodeName == 'exclude':
+					backup_file['exclude%d' % i] = child.firstChild.data.strip()
+					i += 1
+				elif child.nodeName == 'target':
+					backup_file['target'] = child.firstChild.data.strip()
+				elif child.nodeName == 'rsync_options':
+					backup_file['rsync_options'] = child.firstChild.data.strip()
+				elif child.nodeName == 'post_script':
+					backup_file['post_script'] = child.firstChild.data.strip()
 
 			backup_files.append(backup_file)
 
@@ -148,9 +159,20 @@ def load_properties(path):
 
 	i = 1
 	while config.has_section('backup%d' % i):
-		backup_file = [config.get('backup%d' % i, 'source')[0]]
+		backup_file = {'source':config.get('backup%d' % i, 'source')[0]}
+
 		if config.has_option('backup%d' % i, 'exclude'):
-			backup_file.extend(config.get('backup%d' % i, 'exclude'))
+			excludes = (config.get('backup%d' % i, 'exclude'))
+			j = 0
+			for exclude in excludes:
+				backup_file['exclude%d' % j] = exclude
+				j += 1
+		if config.has_option('backup%d' % i, 'target'):
+			backup_file['target'] = config.get('backup%d' % i, 'target')[0]
+		if config.has_option('backup%d' % i, 'rsync_options'):
+			backup_file['rsync_options'] = config.get('backup%d' % i, 'rsync_options')[0]
+		if config.has_option('backup%d' % i, 'post_script'):
+			backup_file['post_script'] = config.get('backup%d' % i, 'post_script')[0]
 
 		backup_files.append(backup_file)
 		i += 1
@@ -188,27 +210,48 @@ def load_properties(path):
 def backup():
 	print "--------------------------------------------------"
 	for files in backup_files:
-		send_notification("Start backup of '%s'." % files[0])
-		print "Backup of: " + files [0]
-		print "Exclude: " + ", ".join(str(x) for x in files[1:])
+		send_notification("Start backup of '%s'." % files['source'])
+		print "Backup of: " + files['source']
 
-		folder = files[0][files[0].index(':') + 1:] if files[0].startswith('ssh ') else files[0]
-		if os.path.isdir(folder) or files[0].startswith('ssh '):
-			if not os.path.exists(os.path.dirname(target + folder)):
-				os.makedirs(os.path.dirname(target + folder))
+		excludes = ''
+		exclude = ''
+		current_rsync_options = rsync_options
+		current_target = target
+		for key, value in files.iteritems():
+			if key.startswith('exclude'):
+				excludes += value + ", "
+				exclude += " --exclude=" + value
+			elif key == 'rsync_options':
+				current_rsync_options = value
+			elif key == 'target':
+				current_target = value
 
-			exclude=''
-			for ex in files[1:]:
-				exclude = exclude + ' --exclude=' + ex
+		if len(excludes) > 0:
+			print "Exclude: " + excludes[0:len(excludes) - 2]
 
-			os.system("rsync %s %s %s %s" % (rsync_options, exclude, files[0] + '/', target + folder))
+		folder = files['source'][files['source'].index(':') + 1:] if files['source'].startswith('ssh ') else files['source']
+		if os.path.isdir(folder) or files['source'].startswith('ssh '):
+			if current_target == target:
+				current_target += folder
+
+			if not os.path.exists(os.path.dirname(current_target)):
+				os.makedirs(os.path.dirname(current_target))
+
+			os.system("rsync %s %s %s %s" % (exclude, current_rsync_options, files['source'] + '/', current_target))
 		else:
-			dirname = os.path.dirname(files[0])
-			if not os.path.exists(os.path.dirname(target + dirname)):
-				os.makedirs(os.path.dirname(target + dirname))
+			dirname = os.path.dirname(files['source'])
+			if current_target == target:
+				current_target += dirname
 
-			os.system("rsync %s %s %s" % (rsync_options, files[0], target + dirname))
+			if not os.path.exists(os.path.dirname(current_target)):
+				os.makedirs(os.path.dirname(current_target))
 
+			os.system("rsync %s %s %s" % (current_rsync_options, files['source'], current_target))
+
+		if 'post_script' in files:
+			send_notification("Start post script.")
+			print "Start post script."
+			os.system(files['post_script'])
 	print "--------------------------------------------------"
 
 def run_pre_backup_script():
