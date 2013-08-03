@@ -291,7 +291,7 @@ def delete_old_dumps(folder):
 	global max_dumps
 
 	if len([f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]) > max_dumps:
-		files = sorted(os.listdir(folder), reverse=True)
+		files = sorted([f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))], reverse=True)
 		j = 1
 		for i in xrange(len(files) - 1):
 			if j >= max_dumps:
