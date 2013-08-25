@@ -178,7 +178,9 @@ def load_properties(path):
 			pgdb['options'] = config.get('pgdb%d' % i, 'options')[0]
 		if config.has_option('pgdb%d' % i, 'target'):
 			pgdb['target'] = config.get('pgdb%d' % i, 'target')[0]
+
 		i += 1
+		postgres.append(pgdb)
 
 	if config.has_section('pipeline'):
 		i = 1
