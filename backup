@@ -17,6 +17,7 @@
 """
 
 import os
+import re
 import sys
 import time
 import pynotify
@@ -215,8 +216,8 @@ def backup():
 		if len(excludes) > 0:
 			print "Exclude: " + excludes[0:len(excludes) - 2]
 
-		folder = files['source'][files['source'].index(':') + 1:] if files['source'].startswith('ssh ') else files['source']
-		if os.path.isdir(folder) or files['source'].startswith('ssh '):
+		folder = files['source'][files['source'].index(':') + 1:] if re.match('^[^/]+:', files['source']) else files['source']
+		if os.path.isdir(folder) or 'e' in current_rsync_options:
 			if current_target == target:
 				current_target += folder
 
