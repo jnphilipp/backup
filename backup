@@ -39,6 +39,7 @@ backup_files = []
 target = ""
 pipeline = {}
 postgres = []
+mysql = []
 pre_backup_script = ""
 post_backup_script = ""
 
@@ -58,6 +59,7 @@ def load_xml(path):
 	global backup_files
 	global pipeline
 	global postgres
+	global mysql
 	global pre_backup_script
 	global post_backup_script
 
@@ -97,10 +99,13 @@ def load_xml(path):
 	pipelinelist = xmldoc.getElementsByTagName('pipe')
 	for s in pipelinelist:
 		pipeline[int(s.attributes['name'].value)] = s.firstChild.data
+		if pipeline[int(s.attributes['name'].value)] == 'backup' and not target:
+			print "No target provided."
+			sys.exit(1)
 
 	postgreslist = xmldoc.getElementsByTagName('pgdb')
 	for s in postgreslist:
-		pgdb = {}
+		pgdb = {'name':'', 'user':'', 'password':'', 'options':'', 'target':''}
 		for child in s.childNodes:
 			if child.nodeName == 'name':
 				pgdb['name'] = child.firstChild.data
@@ -115,12 +120,29 @@ def load_xml(path):
 
 		postgres.append(pgdb)
 
-	if not target:
-		print "No target provided."
-		sys.exit(1)
+	mysqllist = xmldoc.getElementsByTagName('mysql')
+	for s in mysqllist:
+		mysqldb = {'name':'', 'user':'', 'password':'', 'options':'', 'target':''}
+		for child in s.childNodes:
+			if child.nodeName == 'name':
+				mysqldb['name'] = child.firstChild.data
+			elif child.nodeName == 'user':
+				mysqldb['user'] = child.firstChild.data
+			elif child.nodeName == 'password':
+				mysqldb['password'] = child.firstChild.data if child.firstChild != None else ''
+			elif child.nodeName == 'target':
+				mysqldb['target'] = child.firstChild.data
+			elif child.nodeName == 'options':
+				mysqldb['options'] = child.firstChild.data
+
+		mysql.append(mysqldb)
 
 	if len(pipeline) == 0:
-		pipeline[1] = "backup"
+		if target:
+			pipeline[1] = "backup"
+		else:
+			print "No target provided."
+			sys.exit(1)
 
 def load_properties(path):
 	global rsync_options
@@ -128,6 +150,7 @@ def load_properties(path):
 	global backup_files
 	global pipeline
 	global postgres
+	global mysql
 	global pre_backup_script
 	global post_backup_script
 
@@ -166,7 +189,7 @@ def load_properties(path):
 
 	i = 1
 	while config.has_section('pgdb%d' % i):
-		pgdb = {}
+		pgdb = {'name':'', 'user':'', 'password':'', 'options':'', 'target':''}
 
 		if config.has_option('pgdb%d' % i, 'name'):
 			pgdb['name'] = config.get('pgdb%d' % i, 'name')[0]
@@ -182,18 +205,39 @@ def load_properties(path):
 		i += 1
 		postgres.append(pgdb)
 
+	i = 1
+	while config.has_section('mysql%d' % i):
+		mysqldb = {'name':'', 'user':'', 'password':'', 'options':'', 'target':''}
+
+		if config.has_option('mysql%d' % i, 'name'):
+			mysqldb['name'] = config.get('mysql%d' % i, 'name')[0]
+		if config.has_option('mysql%d' % i, 'user'):
+			mysqldb['user'] = config.get('mysql%d' % i, 'user')[0]
+		if config.has_option('mysql%d' % i, 'password'):
+			mysqldb['password'] = config.get('mysql%d' % i, 'password')[0]
+		if config.has_option('mysql%d' % i, 'options'):
+			mysqldb['options'] = config.get('mysql%d' % i, 'options')[0]
+		if config.has_option('mysql%d' % i, 'target'):
+			mysqldb['target'] = config.get('mysql%d' % i, 'target')[0]
+
+		i += 1
+		mysql.append(mysqldb)
+
 	if config.has_section('pipeline'):
 		i = 1
 		while config.has_option('pipeline', str(i)):
 			pipeline[i] = config.get('pipeline', str(i))[0]
+			if pipeline[i] == "backup" and not target:
+				print "No target provided."
+				sys.exit(1)
 			i += 1
 
-	if not target:
-		print "No target provided."
-		sys.exit(1)
-
 	if len(pipeline) == 0:
-		pipeline[1] = "backup"
+		if target:
+			pipeline[1] = "backup"
+		else:
+			print "No target provided."
+			sys.exit(1)
 
 
 def backup():
@@ -269,7 +313,28 @@ def postgres_dump():
 
 	timestamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
 	for pgdb in postgres:
+		if not os.path.exists(os.path.abspath(pgdb['target'])):
+			os.makedirs(os.path.abspath(pgdb['target']))
+
 		os.system("PGPASSWORD=%s pg_dump --username=%s %s %s | gzip -c > %s" % (pgdb['password'], pgdb['user'], pgdb['options'], pgdb['name'], os.path.join(pgdb['target'], "%s_%s.sql.gz" % (pgdb['name'], timestamp))))
+	print "--------------------------------------------------"
+
+def mysql_dump():
+	global postgres
+
+	print "--------------------------------------------------"
+	print "Start backup of MySQL databases."
+	send_notification("Start backup of MySQL databases.")
+
+	timestamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
+	for db in mysql:
+		print os.path.abspath(db['target'])
+		if not os.path.exists(os.path.abspath(db['target'])):
+			os.makedirs(os.path.abspath(db['target']))
+
+		cmd = "mysqldump --user=%s --password=%s %s %s | gzip -c > %s" % (db['user'], db['password'], db['options'], db['name'], os.path.join(db['target'], "%s_%s.sql.gz" % (db['name'], timestamp)))
+		print cmd
+		os.system(cmd)
 	print "--------------------------------------------------"
 
 def run():
@@ -279,7 +344,9 @@ def run():
 	parser = OptionParser(usage)
 	parser.add_option('-x', '--xml', action='store', type='string', dest='xml')
 	parser.add_option('-p', '--properties', action='store', type='string', dest='properties')
+	parser.add_option("-d", "--no-database", action="store_true", dest="database", help="disables database dump")
 	parser.add_option("-n", "--no-postgres", action="store_true", dest="postgres", help="disables PostgreSQL dump")
+	parser.add_option("-m", "--no-mysql", action="store_true", dest="mysql", help="disables MySQL dump")
 	(options, args) = parser.parse_args()
 
 	if options.xml != None:
@@ -292,8 +359,13 @@ def run():
 	for k, v in sorted(pipeline.iteritems()):
 		if v == 'backup':
 			backup()
-		elif v == 'postgres_dump' and not options.postgres:
+		elif v == 'db_dump' and not options.database:
+			mysql_dump()
 			postgres_dump()
+		elif v == 'postgres_dump' and not (options.postgres or options.database):
+			postgres_dump()
+		elif v == 'mysql_dump' and not (options.postgres or options.database):
+			mysql_dump()
 		elif v == 'pre_backup_script':
 			run_pre_backup_script()
 		elif v == 'post_backup_script':
