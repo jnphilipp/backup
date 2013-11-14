@@ -328,13 +328,10 @@ def mysql_dump():
 
 	timestamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
 	for db in mysql:
-		print os.path.abspath(db['target'])
 		if not os.path.exists(os.path.abspath(db['target'])):
 			os.makedirs(os.path.abspath(db['target']))
 
-		cmd = "mysqldump --user=%s --password=%s %s %s | gzip -c > %s" % (db['user'], db['password'], db['options'], db['name'], os.path.join(db['target'], "%s_%s.sql.gz" % (db['name'], timestamp)))
-		print cmd
-		os.system(cmd)
+		os.system("mysqldump --user=%s --password=%s %s %s | gzip -c > %s" % (db['user'], db['password'], db['options'], db['name'], os.path.join(db['target'], "%s_%s.sql.gz" % (db['name'], timestamp))))
 	print "--------------------------------------------------"
 
 def run():
