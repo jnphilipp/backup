@@ -42,6 +42,7 @@ postgres = []
 mysql = []
 pre_backup_script = ""
 post_backup_script = ""
+remote = False
 
 def send_notification(message):
 	"""send feed updates to notify-osd"""
@@ -62,6 +63,7 @@ def load_xml(path):
 	global mysql
 	global pre_backup_script
 	global post_backup_script
+	global remote
 
 	xmldoc = minidom.parse(path)
 	optionlist = xmldoc.getElementsByTagName('options')
@@ -70,6 +72,8 @@ def load_xml(path):
 			if child.firstChild != None:
 				if child.attributes['name'].value == 'rsync_options' and child.firstChild != None:
 					rsync_options = child.firstChild.data
+				if child.attributes['name'].value == 'remote' and child.firstChild != None:
+					remote = child.firstChild.data in ['true', 'True', 't', 'y', 'yes']
 				elif child.attributes['name'].value == 'target' and child.firstChild != None:
 					target = child.firstChild.data
 				elif child.attributes['name'].value == 'pre_backup_script' and child.firstChild != None:
@@ -153,6 +157,7 @@ def load_properties(path):
 	global mysql
 	global pre_backup_script
 	global post_backup_script
+	global remote
 
 	config = ConfigParser.RawConfigParser(dict_type=MultiOrderedDict)
 	config.read([path])
@@ -162,6 +167,8 @@ def load_properties(path):
 			target = config.get('options', 'target')[0]
 		if config.has_option('options', 'rsync_options'):
 			rsync_options = config.get('options', 'rsync_options')[0]
+		if config.has_option('options', 'remote'):
+			remote = config.get('options', 'rsync_options')[0] in ['true', 'True', 't', 'y', 'yes']
 		if config.has_option('options', 'pre_backup_script'):
 			pre_backup_script = config.get('options', 'pre_backup_script')[0]
 		if config.has_option('options', 'post_backup_script'):
@@ -250,6 +257,7 @@ def backup():
 		exclude = ''
 		current_rsync_options = rsync_options
 		current_target = target
+		current_remote = remote
 		for key, value in files.iteritems():
 			if key.startswith('exclude'):
 				excludes += value + ", "
@@ -258,12 +266,14 @@ def backup():
 				current_rsync_options = value
 			elif key == 'target':
 				current_target = value
+			elif key == 'remote':
+				current_remote = value in ['true', 'True', 't', 'y', 'yes']
 
 		if len(excludes) > 0:
 			print "Exclude: " + excludes[0:len(excludes) - 2]
 
 		folder = files['source'][files['source'].index(':') + 1:] if re.match('^[^/]+:', files['source']) else files['source']
-		if os.path.isdir(folder) or 'e' in current_rsync_options:
+		if os.path.isdir(folder) or remote:
 			if current_target == target:
 				current_target += folder
 
