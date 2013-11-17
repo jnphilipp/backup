@@ -124,7 +124,7 @@ def load_xml(path):
 
 		postgres.append(pgdb)
 
-	mysqllist = xmldoc.getElementsByTagName('mysql')
+	mysqllist = xmldoc.getElementsByTagName('mysqldb')
 	for s in mysqllist:
 		mysqldb = {'name':'', 'user':'', 'password':'', 'options':'', 'target':''}
 		for child in s.childNodes:
