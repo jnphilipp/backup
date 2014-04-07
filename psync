@@ -47,8 +47,8 @@ remote = False
 def send_notification(message):
 	"""send feed updates to notify-osd"""
 	try:
-		pynotify.init('Backup')
-		n = pynotify.Notification('Backup', message, 'deja-dup')
+		pynotify.init('psync')
+		n = pynotify.Notification('psync', message, 'deja-dup')
 		n.set_hint_string('x-canonical-append','')
 		n.show()
 	except:
@@ -59,8 +59,6 @@ def load_xml(path):
 	global target
 	global backup_files
 	global pipeline
-	global postgres
-	global mysql
 	global pre_backup_script
 	global post_backup_script
 	global remote
@@ -107,6 +105,27 @@ def load_xml(path):
 			print "No target provided."
 			sys.exit(1)
 
+	databaseslist = xmldoc.getElementsByTagName('databases')
+	for s in databaseslist:
+		for child in s.childNodes:
+			if child.nodeName == 'file':
+				print child.firstChild.data
+				db_doc = minidom.parse(child.firstChild.data)
+				load_xml_databases(db_doc)
+
+	load_xml_databases(xmldoc)
+
+	if len(pipeline) == 0:
+		if target:
+			pipeline[1] = "backup"
+		else:
+			print "No target provided."
+			sys.exit(1)
+
+def load_xml_databases(xmldoc):
+	global postgres
+	global mysql
+
 	postgreslist = xmldoc.getElementsByTagName('pgdb')
 	for s in postgreslist:
 		pgdb = {'name':'', 'user':'', 'password':'', 'options':'', 'target':''}
@@ -140,13 +159,6 @@ def load_xml(path):
 				mysqldb['options'] = child.firstChild.data
 
 		mysql.append(mysqldb)
-
-	if len(pipeline) == 0:
-		if target:
-			pipeline[1] = "backup"
-		else:
-			print "No target provided."
-			sys.exit(1)
 
 def load_properties(path):
 	global rsync_options
