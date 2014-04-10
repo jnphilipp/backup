@@ -128,7 +128,7 @@ def load_xml_databases(xmldoc):
 
 	postgreslist = xmldoc.getElementsByTagName('pgdb')
 	for s in postgreslist:
-		pgdb = {'name':'', 'user':'', 'password':'', 'options':'', 'target':''}
+		pgdb = {'name':'', 'user':'', 'password':'', 'options':'', 'target':'', 'ssh':''}
 		for child in s.childNodes:
 			if child.nodeName == 'name':
 				pgdb['name'] = child.firstChild.data
@@ -140,12 +140,14 @@ def load_xml_databases(xmldoc):
 				pgdb['target'] = child.firstChild.data
 			elif child.nodeName == 'options':
 				pgdb['options'] = child.firstChild.data
+			elif child.nodeName == 'ssh':
+				pgdb['ssh'] = child.firstChild.data
 
 		postgres.append(pgdb)
 
 	mysqllist = xmldoc.getElementsByTagName('mysqldb')
 	for s in mysqllist:
-		mysqldb = {'name':'', 'user':'', 'password':'', 'options':'', 'target':''}
+		mysqldb = {'name':'', 'user':'', 'password':'', 'options':'', 'target':'', 'ssh':''}
 		for child in s.childNodes:
 			if child.nodeName == 'name':
 				mysqldb['name'] = child.firstChild.data
@@ -157,6 +159,8 @@ def load_xml_databases(xmldoc):
 				mysqldb['target'] = child.firstChild.data
 			elif child.nodeName == 'options':
 				mysqldb['options'] = child.firstChild.data
+			elif child.nodeName == 'ssh':
+				mysqldb['ssh'] = child.firstChild.data
 
 		mysql.append(mysqldb)
 
@@ -206,41 +210,13 @@ def load_properties(path):
 		backup_files.append(backup_file)
 		i += 1
 
-	i = 1
-	while config.has_section('pgdb%d' % i):
-		pgdb = {'name':'', 'user':'', 'password':'', 'options':'', 'target':''}
+	if config.has_section('options'):
+		if config.has_option('options', 'target'):
+			db_config = ConfigParser.RawConfigParser(dict_type=MultiOrderedDict)
+			db_config.read([path])
+			load_properties_databases(db_config)
 
-		if config.has_option('pgdb%d' % i, 'name'):
-			pgdb['name'] = config.get('pgdb%d' % i, 'name')[0]
-		if config.has_option('pgdb%d' % i, 'user'):
-			pgdb['user'] = config.get('pgdb%d' % i, 'user')[0]
-		if config.has_option('pgdb%d' % i, 'password'):
-			pgdb['password'] = config.get('pgdb%d' % i, 'password')[0]
-		if config.has_option('pgdb%d' % i, 'options'):
-			pgdb['options'] = config.get('pgdb%d' % i, 'options')[0]
-		if config.has_option('pgdb%d' % i, 'target'):
-			pgdb['target'] = config.get('pgdb%d' % i, 'target')[0]
-
-		i += 1
-		postgres.append(pgdb)
-
-	i = 1
-	while config.has_section('mysql%d' % i):
-		mysqldb = {'name':'', 'user':'', 'password':'', 'options':'', 'target':''}
-
-		if config.has_option('mysql%d' % i, 'name'):
-			mysqldb['name'] = config.get('mysql%d' % i, 'name')[0]
-		if config.has_option('mysql%d' % i, 'user'):
-			mysqldb['user'] = config.get('mysql%d' % i, 'user')[0]
-		if config.has_option('mysql%d' % i, 'password'):
-			mysqldb['password'] = config.get('mysql%d' % i, 'password')[0]
-		if config.has_option('mysql%d' % i, 'options'):
-			mysqldb['options'] = config.get('mysql%d' % i, 'options')[0]
-		if config.has_option('mysql%d' % i, 'target'):
-			mysqldb['target'] = config.get('mysql%d' % i, 'target')[0]
-
-		i += 1
-		mysql.append(mysqldb)
+	load_properties_databases(config)
 
 	if config.has_section('pipeline'):
 		i = 1
@@ -257,6 +233,51 @@ def load_properties(path):
 		else:
 			print "No target provided."
 			sys.exit(1)
+
+
+def load_properties_databases(config):
+	global postgres
+	global mysql
+
+	i = 1
+	while config.has_section('pgdb%d' % i):
+		pgdb = {'name':'', 'user':'', 'password':'', 'options':'', 'target':'', 'ssh':''}
+
+		if config.has_option('pgdb%d' % i, 'name'):
+			pgdb['name'] = config.get('pgdb%d' % i, 'name')[0]
+		if config.has_option('pgdb%d' % i, 'user'):
+			pgdb['user'] = config.get('pgdb%d' % i, 'user')[0]
+		if config.has_option('pgdb%d' % i, 'password'):
+			pgdb['password'] = config.get('pgdb%d' % i, 'password')[0]
+		if config.has_option('pgdb%d' % i, 'options'):
+			pgdb['options'] = config.get('pgdb%d' % i, 'options')[0]
+		if config.has_option('pgdb%d' % i, 'target'):
+			pgdb['target'] = config.get('pgdb%d' % i, 'target')[0]
+		if config.has_option('pgdb%d' % i, 'ssh'):
+			pgdb['ssh'] = config.get('pgdb%d' % i, 'ssh')[0]
+
+		i += 1
+		postgres.append(pgdb)
+
+	i = 1
+	while config.has_section('mysql%d' % i):
+		mysqldb = {'name':'', 'user':'', 'password':'', 'options':'', 'target':'', 'ssh':''}
+
+		if config.has_option('mysql%d' % i, 'name'):
+			mysqldb['name'] = config.get('mysql%d' % i, 'name')[0]
+		if config.has_option('mysql%d' % i, 'user'):
+			mysqldb['user'] = config.get('mysql%d' % i, 'user')[0]
+		if config.has_option('mysql%d' % i, 'password'):
+			mysqldb['password'] = config.get('mysql%d' % i, 'password')[0]
+		if config.has_option('mysql%d' % i, 'options'):
+			mysqldb['options'] = config.get('mysql%d' % i, 'options')[0]
+		if config.has_option('mysql%d' % i, 'target'):
+			mysqldb['target'] = config.get('mysql%d' % i, 'target')[0]
+		if config.has_option('mysql%d' % i, 'ssh'):
+			mysqldb['ssh'] = config.get('mysql%d' % i, 'ssh')[0]
+
+		i += 1
+		mysql.append(mysqldb)
 
 
 def backup():
@@ -338,7 +359,10 @@ def postgres_dump():
 		if not os.path.exists(os.path.abspath(pgdb['target'])):
 			os.makedirs(os.path.abspath(pgdb['target']))
 
-		os.system("PGPASSWORD=%s pg_dump --username=%s %s %s | gzip -c > %s" % (pgdb['password'], pgdb['user'], pgdb['options'], pgdb['name'], os.path.join(pgdb['target'], "%s_%s.sql.gz" % (pgdb['name'], timestamp))))
+		if pgdb['ssh']:
+			os.system("ssh %s PGPASSWORD=%s pg_dump --username=%s %s %s | gzip -c > %s" % (pgdb['ssh'], pgdb['password'], pgdb['user'], pgdb['options'], pgdb['name'], os.path.join(pgdb['target'], "%s_%s.sql.gz" % (pgdb['name'], timestamp))))
+		else:
+			os.system("PGPASSWORD=%s pg_dump --username=%s %s %s | gzip -c > %s" % (pgdb['password'], pgdb['user'], pgdb['options'], pgdb['name'], os.path.join(pgdb['target'], "%s_%s.sql.gz" % (pgdb['name'], timestamp))))
 	print "--------------------------------------------------"
 
 def mysql_dump():
@@ -353,7 +377,10 @@ def mysql_dump():
 		if not os.path.exists(os.path.abspath(db['target'])):
 			os.makedirs(os.path.abspath(db['target']))
 
-		os.system("mysqldump --user=%s --password=%s %s %s | gzip -c > %s" % (db['user'], db['password'], db['options'], db['name'], os.path.join(db['target'], "%s_%s.sql.gz" % (db['name'], timestamp))))
+		if db['ssh']:
+			os.system("ssh %s mysqldump --user=%s --password=%s %s %s | gzip -c > %s" % (db['ssh'], db['user'], db['password'], db['options'], db['name'], os.path.join(db['target'], "%s_%s.sql.gz" % (db['name'], timestamp))))
+		else:
+			os.system("mysqldump --user=%s --password=%s %s %s | gzip -c > %s" % (db['user'], db['password'], db['options'], db['name'], os.path.join(db['target'], "%s_%s.sql.gz" % (db['name'], timestamp))))
 	print "--------------------------------------------------"
 
 def run():

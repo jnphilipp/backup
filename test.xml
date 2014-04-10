@@ -16,6 +16,29 @@
 			<exclude>Library</exclude>
 		</backup_file>
 	</backup_files>
+	<databases>
+		<file>/home/jnphilipp/.backup/databases.xml</file>
+		<postgresql>
+			<pgdb>
+				<name>db_name</name>
+				<user>USER</user>
+				<password>PASSWORD</password>
+				<options>OPTIONS</options>
+				<ssh>USER@SERVER</ssh>
+				<target>/media/backup/PostgreSQL</target>
+			</pgdb>
+		</postgresql>
+		<mysql>
+			<mysqldb>
+				<name>db_name</name>
+				<user>USER</user>
+				<password>PASSWORD</password>
+				<options>OPTIONS</options>
+				<ssh>USER@SERVER</ssh>
+				<target>/media/backup/MySQL</target>
+			</mysqldb>
+		</mysql>
+	</databases>
 	<pipeline>
 		<pipe name="2">backup</pipe>
 	</pipeline>
