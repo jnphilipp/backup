@@ -19,27 +19,28 @@
 	<databases>
 		<file>/home/jnphilipp/.backup/databases.xml</file>
 		<postgresql>
-			<pgdb>
+			<db>
 				<name>db_name</name>
 				<user>USER</user>
 				<password>PASSWORD</password>
 				<options>OPTIONS</options>
 				<ssh>USER@SERVER</ssh>
 				<target>/media/backup/PostgreSQL</target>
-			</pgdb>
+			</db>
 		</postgresql>
 		<mysql>
-			<mysqldb>
+			<db>
 				<name>db_name</name>
 				<user>USER</user>
 				<password>PASSWORD</password>
 				<options>OPTIONS</options>
 				<ssh>USER@SERVER</ssh>
 				<target>/media/backup/MySQL</target>
-			</mysqldb>
+			</db>
 		</mysql>
 	</databases>
 	<pipeline>
+		<pipe name="1">db_dump</pipe>
 		<pipe name="2">backup</pipe>
 	</pipeline>
 </backup>

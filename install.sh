@@ -2,8 +2,8 @@
 
 sudo apt-get install python-configparser
 
-sudo cp backup /usr/bin/backup
-sudo chmod +x /usr/bin/backup
+sudo cp psync /usr/bin/psync
+sudo chmod +x /usr/bin/psync
 
-MESSAGE="backup install completed."
+MESSAGE="psync install completed."
 echo $MESSAGE
