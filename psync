@@ -37,7 +37,7 @@ class MultiOrderedDict(OrderedDict):
 
 rsync_options = ''
 backup_files = []
-target = ''
+target = None
 pipeline = {}
 postgres = []
 mysql = []
@@ -47,8 +47,7 @@ post_backup_script = ''
 def send_notification(message):
 	'''send feed updates to notify-osd'''
 	try:
-		pynotify.init('psync')
-		notification = Notify.Notification.new(title, message, 'file://%s' % image if image else None)
+		notification = Notify.Notification.new('psync', message, 'deja-dup')
 		notification.show()
 	except:
 		print(message)
@@ -307,7 +306,7 @@ def backup():
 			print('is remote: %s' % files['source'])
 			current_target += '/%s' % re.sub(r'^([^/]+@)?[^/]+:', match.group(0)[:-1], files['source'])
 		else:
-			current_target += '/%s%s' % (hostname, files['source'])
+			current_target += '/%s%s' % (hostname, files['source'] if os.path.isdir(files['source']) else os.path.dirname(files['source']))
 
 		if not os.path.exists(current_target):
 			os.makedirs(current_target)
