@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """
@@ -21,12 +21,12 @@ import re
 import socket
 import sys
 import time
-import pynotify
-import ConfigParser
 
-from xml.dom import minidom
-from optparse import OptionParser
 from collections import OrderedDict
+from configparser import ConfigParser
+from gi.repository import Notify
+from optparse import OptionParser
+from xml.dom import minidom
 
 class MultiOrderedDict(OrderedDict):
 	def __setitem__(self, key, value):
@@ -48,11 +48,10 @@ def send_notification(message):
 	'''send feed updates to notify-osd'''
 	try:
 		pynotify.init('psync')
-		n = pynotify.Notification('psync', message, 'deja-dup')
-		n.set_hint_string('x-canonical-append','')
-		n.show()
+		notification = Notify.Notification.new(title, message, 'file://%s' % image if image else None)
+		notification.show()
 	except:
-		print message
+		print(message)
 
 def load_xml(path):
 	global rsync_options
@@ -99,14 +98,13 @@ def load_xml(path):
 	for s in pipelinelist:
 		pipeline[int(s.attributes['name'].value)] = s.firstChild.data
 		if pipeline[int(s.attributes['name'].value)] == 'backup' and not target:
-			print 'No target provided.'
+			print('No target provided.')
 			sys.exit(1)
 
 	databaseslist = xmldoc.getElementsByTagName('databases')
 	for s in databaseslist:
 		for child in s.childNodes:
 			if child.nodeName == 'file':
-				print child.firstChild.data
 				db_doc = minidom.parse(child.firstChild.data)
 				load_xml_databases(db_doc)
 
@@ -116,7 +114,7 @@ def load_xml(path):
 		if target:
 			pipeline[1] = 'backup'
 		else:
-			print 'No target provided.'
+			print('No target provided.')
 			sys.exit(1)
 
 def load_xml_databases(xmldoc):
@@ -220,7 +218,7 @@ def load_properties(path):
 		while config.has_option('pipeline', str(i)):
 			pipeline[i] = config.get('pipeline', str(i))[0]
 			if pipeline[i] == 'backup' and not target:
-				print 'No target provided.'
+				print('No target provided.')
 				sys.exit(1)
 			i += 1
 
@@ -228,7 +226,7 @@ def load_properties(path):
 		if target:
 			pipeline[1] = 'backup'
 		else:
-			print 'No target provided.'
+			print('No target provided.')
 			sys.exit(1)
 
 
@@ -281,18 +279,18 @@ def backup():
 	global rsync_options
 	global target
 
-	print '--------------------------------------------------------------------------------'
+	print('--------------------------------------------------------------------------------')
 	hostname = socket.gethostname()
 
 	for files in backup_files:
 		send_notification('Start backup of "%s".' % files['source'])
-		print 'Backup of: %s' % files['source']
+		print('Backup of: %s' % files['source'])
 
 		excludes = ''
 		exclude = ''
 		current_rsync_options = rsync_options
 		current_target = target
-		for key, value in files.iteritems():
+		for key, value in files.items():
 			if key.startswith('exclude'):
 				excludes += value + ', '
 				exclude += ' --exclude=' + value
@@ -302,11 +300,11 @@ def backup():
 				current_target = value
 
 		if len(excludes) > 0:
-			print 'Exclude: %s' % excludes[0:len(excludes) - 2]
+			print('Exclude: %s' % excludes[0:len(excludes) - 2])
 
 		match = re.match(r'^([^/]+@)?[^/]+:', files['source'])
 		if match:
-			print 'is remote: %s' % files['source']
+			print('is remote: %s' % files['source'])
 			current_target += '/%s' % re.sub(r'^([^/]+@)?[^/]+:', match.group(0)[:-1], files['source'])
 		else:
 			current_target += '/%s%s' % (hostname, files['source'])
@@ -314,43 +312,44 @@ def backup():
 		if not os.path.exists(current_target):
 			os.makedirs(current_target)
 
-		print 'rsync %s %s %s %s' % (exclude, current_rsync_options, '%s/' % files['source'] if os.path.isdir(files['source']) else files['source'], current_target)
-		os.system('rsync %s %s %s %s' % (exclude, current_rsync_options, files['source'] + '/' if os.path.isdir(files['source']) else files['source'], current_target))
+		rsync = 'rsync %s %s %s %s' % (exclude, current_rsync_options, '%s/' % files['source'] if os.path.isdir(files['source']) else files['source'], current_target)
+		print(rsync)
+		os.system(rsync)
 
 		if 'post_script' in files:
 			send_notification('Start post script.')
-			print 'Start post script.'
+			print('Start post script.')
 			os.system(files['post_script'])
-		print '--------------------------------------------------------------------------------'
+		print('--------------------------------------------------------------------------------')
 
 def run_pre_backup_script():
 	if not pre_backup_script:
 		return
 
-	print '--------------------------------------------------------------------------------'
+	print('--------------------------------------------------------------------------------')
 	os.system(pre_backup_script)
-	print '--------------------------------------------------------------------------------'
+	print('--------------------------------------------------------------------------------')
 
 def run_post_backup_script():
 	if not post_backup_script:
 		return
 
-	print '--------------------------------------------------------------------------------'
+	print('--------------------------------------------------------------------------------')
 	send_notification('Start post backup script.')
 	os.system(post_backup_script)
-	print '--------------------------------------------------------------------------------'
+	print('--------------------------------------------------------------------------------')
 
 def postgres_dump():
 	global postgres
 	global target
 
-	print '--------------------------------------------------------------------------------'
-	print 'Start backup of PostgreSQL databases.'
+	print('--------------------------------------------------------------------------------')
+	print('Start backup of PostgreSQL databases.')
 	send_notification('Start backup of PostgreSQL databases.')
 
 	timestamp = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())
 	for db in postgres:
-		print 'Backup of: %s' % db['name']
+		print('Backup of: %s' % db['name'])
 		current_target = '%s/%s/DBDumps/PostgreSQL/%s' % (target, db['ssh'] if 'ssh' in db else socket.gethostname(), db['name'])
 		if 'target' in db:
 			current_target = db['target']
@@ -359,19 +358,19 @@ def postgres_dump():
 			os.makedirs(current_target)
 
 		os.system('%sPGPASSWORD=%s pg_dump --username=%s %s %s | gzip -c > %s' % ('ssh %s ' % db['ssh'] if 'ssh' in db else '', db['password'], db['user'], db['options'] if 'options' in db else '', db['name'], os.path.join(current_target, '%s_%s.sql.gz' % (db['name'], timestamp))))
-	print '--------------------------------------------------------------------------------'
+	print('--------------------------------------------------------------------------------')
 
 def mysql_dump():
 	global mysql
 	global target
 
-	print '--------------------------------------------------------------------------------'
-	print 'Start backup of MySQL databases.'
+	print('--------------------------------------------------------------------------------')
+	print('Start backup of MySQL databases.')
 	send_notification('Start backup of MySQL databases.')
 
 	timestamp = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())
 	for db in mysql:
-		print 'Backup of: %s' % db['name']
+		print('Backup of: %s' % db['name'])
 		current_target = '%s/%s/DBDumps/MySQL/%s' % (target, db['ssh'] if 'ssh' in db else socket.gethostname(), db['name'])
 		if 'target' in db:
 			current_target = db['target']
@@ -380,7 +379,7 @@ def mysql_dump():
 			os.makedirs(current_target)
 
 		os.system('%smysqldump --user=%s --password=%s %s %s | gzip -c > %s' % ('ssh %s ' % db['ssh'] if 'ssh' in db else '', db['user'], db['password'], db['options'] if 'options' in db else '', db['name'], os.path.join(current_target, '%s_%s.sql.gz' % (db['name'], timestamp))))
-	print '--------------------------------------------------------------------------------'
+	print('--------------------------------------------------------------------------------')
 
 def run():
 	global pipeline
@@ -405,7 +404,7 @@ def run():
 	else:
 		parser.print_help()
 
-	for k, v in sorted(pipeline.iteritems()):
+	for k, v in sorted(pipeline.items()):
 		if v == 'backup':
 			backup()
 		elif v == 'db_dump' and not options.database:
@@ -421,4 +420,5 @@ def run():
 			run_post_backup_script()
 
 if __name__ == '__main__':
+	Notify.init('psync')
 	run()
