@@ -304,9 +304,9 @@ def backup():
 		match = re.match(r'^([^/]+@)?[^/]+:', files['source'])
 		if match:
 			print('is remote: %s' % files['source'])
-			current_target += '/%s' % re.sub(r'^([^/]+@)?[^/]+:', match.group(0)[:-1], files['source'])
+			current_target += '/%s' % re.sub(r'^([^/]+@)?[^/]+:', '%s/Files' % match.group(0)[:-1], files['source'])
 		else:
-			current_target += '/%s%s' % (hostname, files['source'] if os.path.isdir(files['source']) else os.path.dirname(files['source']))
+			current_target += '/%s/Files%s' % (hostname, files['source'] if os.path.isdir(files['source']) else os.path.dirname(files['source']))
 
 		if not os.path.exists(current_target):
 			os.makedirs(current_target)
