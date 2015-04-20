@@ -19,6 +19,7 @@
 import os
 import re
 import socket
+import subprocess
 import sys
 import time
 
@@ -130,6 +131,8 @@ def load_xml_databases(xmldoc):
 						db['name'] = child.firstChild.data
 					elif child.nodeName == 'user':
 						db['user'] = child.firstChild.data
+					elif child.nodeName == 'pass':
+						db['pass'] = child.firstChild.data if child.firstChild != None else ''
 					elif child.nodeName == 'password':
 						db['password'] = child.firstChild.data if child.firstChild != None else ''
 					elif child.nodeName == 'target':
@@ -150,6 +153,8 @@ def load_xml_databases(xmldoc):
 						db['name'] = child.firstChild.data
 					elif child.nodeName == 'user':
 						db['user'] = child.firstChild.data
+					elif child.nodeName == 'pass':
+						db['pass'] = child.firstChild.data if child.firstChild != None else ''
 					elif child.nodeName == 'password':
 						db['password'] = child.firstChild.data if child.firstChild != None else ''
 					elif child.nodeName == 'target':
@@ -241,6 +246,8 @@ def load_properties_databases(config):
 			db['name'] = config.get('db%d' % i, 'name')[0]
 		if config.has_option('db%d' % i, 'user'):
 			db['user'] = config.get('db%d' % i, 'user')[0]
+		if config.has_option('db%d' % i, 'pass'):
+			db['pass'] = config.get('db%d' % i, 'pass')[0]
 		if config.has_option('db%d' % i, 'password'):
 			db['password'] = config.get('db%d' % i, 'password')[0]
 		if config.has_option('db%d' % i, 'options'):
@@ -261,6 +268,8 @@ def load_properties_databases(config):
 			db['name'] = config.get('db%d' % i, 'name')[0]
 		if config.has_option('db%d' % i, 'user'):
 			db['user'] = config.get('db%d' % i, 'user')[0]
+		if config.has_option('db%d' % i, 'pass'):
+			db['pass'] = config.get('db%d' % i, 'pass')[0]
 		if config.has_option('db%d' % i, 'password'):
 			db['password'] = config.get('db%d' % i, 'password')[0]
 		if config.has_option('db%d' % i, 'options'):
@@ -335,9 +344,6 @@ def backup(snapshots):
 
 			os.system('cd %s/Files && tar -czf ../Snapshots/%s.tar.gz *' % (base_dir, timestamp))
 
-			#snapshots 
-			#tar -czf Snapshots/0000.tar.gz `ls -I Snapshots -I DBDumps`
-
 def run_pre_backup_script():
 	if not pre_backup_script:
 		return
@@ -354,6 +360,14 @@ def run_post_backup_script():
 	send_notification('Start post backup script.')
 	os.system(post_backup_script)
 	print('--------------------------------------------------------------------------------')
+
+def _pass(path):
+	if path:
+		proc = subprocess.Popen('pass %s' % path, stdout=subprocess.PIPE, shell=True)
+		(out, err) = proc.communicate()
+		return out.decode('utf-8').split('\n')[0]
+	else:
+		return ''
 
 def postgres_dump():
 	global postgres
@@ -373,7 +387,8 @@ def postgres_dump():
 		if not os.path.exists(current_target):
 			os.makedirs(current_target)
 
-		os.system('%sPGPASSWORD=%s pg_dump --username=%s %s %s | gzip -c > %s' % ('ssh %s ' % db['ssh'] if 'ssh' in db else '', db['password'], db['user'], db['options'] if 'options' in db else '', db['name'], os.path.join(current_target, '%s_%s.sql.gz' % (db['name'], timestamp))))
+		password = _pass(db['pass']) if 'pass' in db else db['password']
+		os.system('%sPGPASSWORD=%s pg_dump --username=%s %s %s | gzip -c > %s' % ('ssh %s ' % db['ssh'] if 'ssh' in db else '', password, db['user'], db['options'] if 'options' in db else '', db['name'], os.path.join(current_target, '%s_%s.sql.gz' % (db['name'], timestamp))))
 	print('--------------------------------------------------------------------------------')
 
 def mysql_dump():
@@ -394,7 +409,8 @@ def mysql_dump():
 		if not os.path.exists(current_target):
 			os.makedirs(current_target)
 
-		os.system('%smysqldump --user=%s --password=%s %s %s | gzip -c > %s' % ('ssh %s ' % db['ssh'] if 'ssh' in db else '', db['user'], db['password'], db['options'] if 'options' in db else '', db['name'], os.path.join(current_target, '%s_%s.sql.gz' % (db['name'], timestamp))))
+		password = _pass(db['pass']) if 'pass' in db else db['password']
+		os.system('%smysqldump --user=%s --password=%s %s %s | gzip -c > %s' % ('ssh %s ' % db['ssh'] if 'ssh' in db else '', db['user'], password, db['options'] if 'options' in db else '', db['name'], os.path.join(current_target, '%s_%s.sql.gz' % (db['name'], timestamp))))
 	print('--------------------------------------------------------------------------------')
 
 def run():
