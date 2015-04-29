@@ -342,7 +342,7 @@ def backup(snapshots):
 			if not os.path.exists('%s/Snapshots' % base_dir):
 				os.makedirs('%s/Snapshots' % base_dir)
 
-			os.system('cd %s/Files && tar -czf ../Snapshots/%s.tar.gz ./*' % (base_dir, timestamp))
+			os.system('cd %s && tar -czf Snapshots/%s.tar.gz Files/*' % (base_dir, timestamp))
 
 def run_pre_backup_script():
 	if not pre_backup_script:
