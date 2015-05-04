@@ -349,7 +349,7 @@ def backup(snapshot, root):
 			os.chdir('%s/Files' % base_dir)
 			if not os.system('git rev-parse') == 0:
 				os.system('git init')
-			os.system('%s git add .' % 'sudo' if root else '')
+			os.system('%sgit add -A' % ('sudo ' if root else ''))
 			os.system("git commit -m 'Backup from %s.'" % timestamp)
 			print('--------------------------------------------------------------------------------')
 
