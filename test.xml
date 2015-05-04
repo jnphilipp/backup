@@ -3,6 +3,7 @@
 		<option name="source">/</option>
 		<option name="target">/media/backup</option>
 		<option name="rsync_options">--delete -aucPz</option>
+		<option name="git">no</option>
 	</options>
 	<backup_files>
 		<backup_file>/home/jnphilipp/Documents/Texte
@@ -17,7 +18,7 @@
 		</backup_file>
 	</backup_files>
 	<databases>
-		<file>/home/jnphilipp/.backup/databases.xml</file>
+		<file>databases.xml</file>
 		<postgresql>
 			<db>
 				<name>db_name</name>

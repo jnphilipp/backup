@@ -24,7 +24,7 @@ import sys
 import time
 
 from collections import OrderedDict
-from configparser import ConfigParser
+from configparser import RawConfigParser
 from gi.repository import Notify
 from optparse import OptionParser
 from xml.dom import minidom
@@ -42,6 +42,7 @@ target = None
 pipeline = {}
 postgres = []
 mysql = []
+git = True
 pre_backup_script = ''
 post_backup_script = ''
 
@@ -58,6 +59,7 @@ def load_xml(path):
 	global target
 	global backup_files
 	global pipeline
+	global git
 	global pre_backup_script
 	global post_backup_script
 
@@ -74,6 +76,9 @@ def load_xml(path):
 					pre_backup_script = child.firstChild.data
 				elif child.attributes['name'].value == 'post_backup_script' and child.firstChild != None:
 					post_backup_script = child.firstChild.data
+				elif child.attributes['name'].value == 'git' and child.firstChild != None:
+					print('git: %s' % child.firstChild.data)
+					git = RawConfigParser.BOOLEAN_STATES[child.firstChild.data.lower()] if child.firstChild.data.lower() in RawConfigParser.BOOLEAN_STATES else True
 
 	backup_files_list = xmldoc.getElementsByTagName('backup_file')
 	for s in backup_files_list:
@@ -172,11 +177,12 @@ def load_properties(path):
 	global pipeline
 	global postgres
 	global mysql
+	global git
 	global pre_backup_script
 	global post_backup_script
 	global remote
 
-	config = ConfigParser.RawConfigParser(dict_type=MultiOrderedDict)
+	config = RawConfigParser(dict_type=MultiOrderedDict)
 	config.read([path])
 
 	if config.has_section('options'):
@@ -188,13 +194,15 @@ def load_properties(path):
 			pre_backup_script = config.get('options', 'pre_backup_script')[0]
 		if config.has_option('options', 'post_backup_script'):
 			post_backup_script = config.get('options', 'post_backup_script')[0]
+		if config.has_option('options', 'git'):
+			git = config.BOOLEAN_STATES[config.get('options', 'git')[0].lower()] if config.get('options', 'git')[0].lower() in config.BOOLEAN_STATES else True
 
 	i = 1
 	while config.has_section('backup%d' % i):
 		backup_file = {'source':config.get('backup%d' % i, 'source')[0]}
 
 		if config.has_option('backup%d' % i, 'exclude'):
-			excludes = (config.get('backup%d' % i, 'exclude'))
+			excludes = config.get('backup%d' % i, 'exclude')[0].split(',')
 			j = 0
 			for exclude in excludes:
 				backup_file['exclude%d' % j] = exclude
@@ -211,7 +219,7 @@ def load_properties(path):
 
 	if config.has_section('options'):
 		if config.has_option('options', 'target'):
-			db_config = ConfigParser.RawConfigParser(dict_type=MultiOrderedDict)
+			db_config = RawConfigParser(dict_type=MultiOrderedDict)
 			db_config.read([path])
 			load_properties_databases(db_config)
 
@@ -283,9 +291,10 @@ def load_properties_databases(config):
 		mysql.append(db)
 
 
-def backup(snapshot, root_snapshot):
+def backup(snapshot, root):
 	global rsync_options
 	global target
+	global git
 
 	print('--------------------------------------------------------------------------------')
 	hostname = socket.gethostname()
@@ -333,16 +342,28 @@ def backup(snapshot, root_snapshot):
 			os.system(files['post_script'])
 		print('--------------------------------------------------------------------------------')
 
-	if snapshot or root_snapshot:
+	if git:
 		timestamp = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())
+		for base_dir in base_dirs:
+			print('Commit changes in %s' % base_dir)
+			os.chdir('%s/Files' % base_dir)
+			if not os.system('git rev-parse') == 0:
+				os.system('git init')
+			os.system('%s git add .' % 'sudo' if root else '')
+			os.system("git commit -m 'Backup from %s.'" % timestamp)
+			print('--------------------------------------------------------------------------------')
+
+	if snapshot:
+		timestamp = time.strftime('%Y%m%dT%H%M%S', time.localtime())
 		for base_dir in base_dirs:
 			send_notification('Making snapshot of "%s".' % base_dir)
 			print('Snapshot of: %s' % base_dir)
 
 			if not os.path.exists('%s/Snapshots' % base_dir):
 				os.makedirs('%s/Snapshots' % base_dir)
-
-				os.system('cd %s && %s tar -czf Snapshots/%s.tar.gz Files/*' % (base_dir, 'sudo' if root_snapshot else '', timestamp))
+			os.chdir('%s/Files' % base_dir)
+			os.system("%s tar -czf ../Snapshots/%s.tar.gz * .??*" % ('sudo' if root else '', timestamp))
+			print('--------------------------------------------------------------------------------')
 
 def run_pre_backup_script():
 	if not pre_backup_script:
@@ -416,6 +437,7 @@ def mysql_dump():
 def run():
 	global pipeline
 	global target
+	global git
 
 	usage = 'usage: %prog [options]'
 	parser = OptionParser(usage)
@@ -426,7 +448,7 @@ def run():
 	parser.add_option('-n', '--no-postgres', action='store_true', dest='postgres', help='disables PostgreSQL dump')
 	parser.add_option('-m', '--no-mysql', action='store_true', dest='mysql', help='disables MySQL dump')
 	parser.add_option('-s', '--snapshot', action='store_true', dest='snapshot', help='make snapshot')
-	parser.add_option('-r', '--root_snapshot', action='store_true', dest='root_snapshot', help='make snapshot as root')
+	parser.add_option('-r', '--root', action='store_true', dest='root', help='make snapshot and git add as root')
 	(options, args) = parser.parse_args()
 
 	if options.target != None:
@@ -440,7 +462,7 @@ def run():
 
 	for k, v in sorted(pipeline.items()):
 		if v == 'backup':
-			backup(options.snapshot, options.root_snapshot)
+			backup(options.snapshot, options.root)
 		elif v == 'db_dump' and not options.database:
 			mysql_dump()
 			postgres_dump()
