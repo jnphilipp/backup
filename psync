@@ -350,7 +350,7 @@ def backup(snapshot, root):
 			if not os.system('git rev-parse') == 0:
 				os.system('git init')
 			os.system('%sgit add -A' % ('sudo ' if root else ''))
-			os.system("git commit -m 'Backup from %s.'" % timestamp)
+			os.system("%sgit commit -m 'Backup from %s.'" % ('sudo ' if root else '', timestamp))
 			print('--------------------------------------------------------------------------------')
 
 	if snapshot:
@@ -464,12 +464,15 @@ def run():
 		if v == 'backup':
 			backup(options.snapshot, options.root)
 		elif v == 'db_dump' and not options.database:
-			mysql_dump()
+			if not options.mysql:
+				mysql_dump()
+			if not options.postgres:
+				postgres_dump()
+		elif v == 'postgres_dump' and not (options.postgres or options.database):
 			postgres_dump()
-		elif v == 'postgres_dump' and not (options.postgres and options.database):
-			postgres_dump()
-		elif v == 'mysql_dump' and not (options.postgres or options.database):
+		elif v == 'mysql_dump' and not (options.mysql or options.database):
 			mysql_dump()
+			print('mysql')
 		elif v == 'pre_backup_script':
 			run_pre_backup_script()
 		elif v == 'post_backup_script':
