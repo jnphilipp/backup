@@ -398,7 +398,7 @@ def postgres_dump():
 	print('Start backup of PostgreSQL databases.')
 	send_notification('Start backup of PostgreSQL databases.')
 
-	timestamp = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())
+	timestamp = time.strftime('%Y%m%dT%H%M%S', time.localtime())
 	for db in postgres:
 		print('Backup of: %s' % db['name'])
 		current_target = '%s/%s/DBDumps/PostgreSQL/%s' % (target, db['ssh'] if 'ssh' in db else socket.gethostname(), db['name'])
@@ -420,7 +420,7 @@ def mysql_dump():
 	print('Start backup of MySQL databases.')
 	send_notification('Start backup of MySQL databases.')
 
-	timestamp = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())
+	timestamp = time.strftime('%Y%m%dT%H%M%S', time.localtime())
 	for db in mysql:
 		print('Backup of: %s' % db['name'])
 		current_target = '%s/%s/DBDumps/MySQL/%s' % (target, db['ssh'] if 'ssh' in db else socket.gethostname(), db['name'])
