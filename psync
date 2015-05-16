@@ -466,23 +466,23 @@ def run():
 	else:
 		parser.print_help()
 
-	# for k, v in sorted(pipeline.items()):
-	# 	if v == 'backup':
-	# 		backup(options.snapshot, options.root)
-	# 	elif v == 'db_dump' and not options.database:
-	# 		if not options.mysql:
-	# 			mysql_dump()
-	# 		if not options.postgres:
-	# 			postgres_dump()
-	# 	elif v == 'postgres_dump' and not (options.postgres or options.database):
-	# 		postgres_dump()
-	# 	elif v == 'mysql_dump' and not (options.mysql or options.database):
-	# 		mysql_dump()
-	# 		print('mysql')
-	# 	elif v == 'pre_backup_script':
-	# 		run_pre_backup_script()
-	# 	elif v == 'post_backup_script':
-	# 		run_post_backup_script()
+	for k, v in sorted(pipeline.items()):
+		if v == 'backup':
+			backup(options.snapshot, options.root)
+		elif v == 'db_dump' and not options.database:
+			if not options.mysql:
+				mysql_dump()
+			if not options.postgres:
+				postgres_dump()
+		elif v == 'postgres_dump' and not (options.postgres or options.database):
+			postgres_dump()
+		elif v == 'mysql_dump' and not (options.mysql or options.database):
+			mysql_dump()
+			print('mysql')
+		elif v == 'pre_backup_script':
+			run_pre_backup_script()
+		elif v == 'post_backup_script':
+			run_post_backup_script()
 
 if __name__ == '__main__':
 	Notify.init('psync')
