@@ -3,7 +3,7 @@
 		<option name="source">/</option>
 		<option name="target">/media/backup</option>
 		<option name="rsync_options">--delete -aucPz</option>
-		<option name="git">no</option>
+		<option name="git" root="yes">no</option>
 	</options>
 	<backup_files>
 		<backup_file>/home/jnphilipp/Documents/Texte

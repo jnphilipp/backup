@@ -43,6 +43,7 @@ pipeline = {}
 postgres = []
 mysql = []
 git = True
+git_root = False
 pre_backup_script = ''
 post_backup_script = ''
 
@@ -60,6 +61,7 @@ def load_xml(path):
 	global backup_files
 	global pipeline
 	global git
+	global git_root
 	global pre_backup_script
 	global post_backup_script
 
@@ -77,7 +79,8 @@ def load_xml(path):
 				elif child.attributes['name'].value == 'post_backup_script' and child.firstChild != None:
 					post_backup_script = child.firstChild.data
 				elif child.attributes['name'].value == 'git' and child.firstChild != None:
-					print('git: %s' % child.firstChild.data)
+					if 'root' in child.attributes:
+						git_root = RawConfigParser.BOOLEAN_STATES[child.attributes['root'].value] if child.attributes['root'].value.lower() in RawConfigParser.BOOLEAN_STATES else False
 					git = RawConfigParser.BOOLEAN_STATES[child.firstChild.data.lower()] if child.firstChild.data.lower() in RawConfigParser.BOOLEAN_STATES else True
 
 	backup_files_list = xmldoc.getElementsByTagName('backup_file')
@@ -196,6 +199,8 @@ def load_properties(path):
 			post_backup_script = config.get('options', 'post_backup_script')[0]
 		if config.has_option('options', 'git'):
 			git = config.BOOLEAN_STATES[config.get('options', 'git')[0].lower()] if config.get('options', 'git')[0].lower() in config.BOOLEAN_STATES else True
+		if config.has_option('options', 'root_git'):
+			git = config.BOOLEAN_STATES[config.get('options', 'root_git')[0].lower()] if config.get('options', 'root_git')[0].lower() in config.BOOLEAN_STATES else True
 
 	i = 1
 	while config.has_section('backup%d' % i):
@@ -295,6 +300,7 @@ def backup(snapshot, root):
 	global rsync_options
 	global target
 	global git
+	global git_root
 
 	print('--------------------------------------------------------------------------------')
 	hostname = socket.gethostname()
@@ -349,8 +355,8 @@ def backup(snapshot, root):
 			os.chdir('%s/Files' % base_dir)
 			if not os.system('git rev-parse') == 0:
 				os.system('git init')
-			os.system('%sgit add -A' % ('sudo ' if root else ''))
-			os.system("%sgit commit -m 'Backup from %s.'" % ('sudo ' if root else '', timestamp))
+			os.system('%sgit add -A' % ('sudo ' if root or git_root else ''))
+			os.system("%sgit commit -m 'Backup from %s.'" % ('sudo ' if root or git_root else '', timestamp))
 			print('--------------------------------------------------------------------------------')
 
 	if snapshot:
@@ -460,23 +466,23 @@ def run():
 	else:
 		parser.print_help()
 
-	for k, v in sorted(pipeline.items()):
-		if v == 'backup':
-			backup(options.snapshot, options.root)
-		elif v == 'db_dump' and not options.database:
-			if not options.mysql:
-				mysql_dump()
-			if not options.postgres:
-				postgres_dump()
-		elif v == 'postgres_dump' and not (options.postgres or options.database):
-			postgres_dump()
-		elif v == 'mysql_dump' and not (options.mysql or options.database):
-			mysql_dump()
-			print('mysql')
-		elif v == 'pre_backup_script':
-			run_pre_backup_script()
-		elif v == 'post_backup_script':
-			run_post_backup_script()
+	# for k, v in sorted(pipeline.items()):
+	# 	if v == 'backup':
+	# 		backup(options.snapshot, options.root)
+	# 	elif v == 'db_dump' and not options.database:
+	# 		if not options.mysql:
+	# 			mysql_dump()
+	# 		if not options.postgres:
+	# 			postgres_dump()
+	# 	elif v == 'postgres_dump' and not (options.postgres or options.database):
+	# 		postgres_dump()
+	# 	elif v == 'mysql_dump' and not (options.mysql or options.database):
+	# 		mysql_dump()
+	# 		print('mysql')
+	# 	elif v == 'pre_backup_script':
+	# 		run_pre_backup_script()
+	# 	elif v == 'post_backup_script':
+	# 		run_post_backup_script()
 
 if __name__ == '__main__':
 	Notify.init('psync')
