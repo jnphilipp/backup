@@ -360,7 +360,8 @@ def backup(snapshot, root):
 			print('--------------------------------------------------------------------------------')
 
 	if snapshot:
-		timestamp = time.strftime('%Y%m%dT%H%M%S', time.localtime())
+		t = time.localtime()
+		timestamp = time.strftime('%Y%m%dT%H%M%S', t)
 		for base_dir in base_dirs:
 			send_notification('Making snapshot of "%s".' % base_dir)
 			print('Snapshot of: %s' % base_dir)
@@ -368,6 +369,8 @@ def backup(snapshot, root):
 			if not os.path.exists('%s/Snapshots' % base_dir):
 				os.makedirs('%s/Snapshots' % base_dir)
 			os.chdir('%s/Files' % base_dir)
+			if git:
+				os.system("%sgit tag -a v%s -m '%s'" % ('sudo ' if root or git_root else '', timestamp, time.strftime('Snapshot from %d. %B %Y %H:%M:%S.', t)))
 			os.system("%s tar -czf ../Snapshots/%s.tar.gz * .??*" % ('sudo' if root else '', timestamp))
 			print('--------------------------------------------------------------------------------')
 
