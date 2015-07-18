@@ -65,6 +65,10 @@ def load_xml(path):
 	global pre_backup_script
 	global post_backup_script
 
+	if not os.path.exists(path):
+		print('xml-file not found. aborting...')
+		return
+
 	xmldoc = minidom.parse(path)
 	optionlist = xmldoc.getElementsByTagName('options')
 	for s in optionlist:
@@ -184,6 +188,10 @@ def load_properties(path):
 	global pre_backup_script
 	global post_backup_script
 	global remote
+
+	if not os.path.exists(path):
+		print('properties-file not found. aborting...')
+		return
 
 	config = RawConfigParser(dict_type=MultiOrderedDict)
 	config.read([path])
@@ -481,7 +489,6 @@ def run():
 			postgres_dump()
 		elif v == 'mysql_dump' and not (options.mysql or options.database):
 			mysql_dump()
-			print('mysql')
 		elif v == 'pre_backup_script':
 			run_pre_backup_script()
 		elif v == 'post_backup_script':
