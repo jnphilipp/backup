@@ -1,132 +1,131 @@
 <?xml version="1.0"?>
 <xs:schema targetNamespace="http://jnphilipp.org/psync/" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:p="http://jnphilipp.org/psync/" elementFormDefault="qualified" attributeFormDefault="unqualified">
+    <xs:element name="psync" type="p:psyncType">
+        <xs:unique name="UniqueOptionName">
+            <xs:selector xpath=".//option"/>
+            <xs:field xpath="@name"/>
+        </xs:unique>
+        <xs:unique name="UniqueStepNo">
+            <xs:selector xpath=".//step"/>
+            <xs:field xpath="@no"/>
+        </xs:unique>
+        <xs:unique name="UniqueSourcePath">
+            <xs:selector xpath=".//source/path"/>
+            <xs:field xpath="."/>
+        </xs:unique>
+    </xs:element>
 
-<xs:element name="psync" type="p:psyncType">
-    <xs:unique name="UniqueOptionName">
-        <xs:selector xpath=".//option"/>
-        <xs:field xpath="@name"/>
-    </xs:unique>
-    <xs:unique name="UniqueStepNo">
-        <xs:selector xpath=".//step"/>
-        <xs:field xpath="@no"/>
-    </xs:unique>
-    <xs:unique name="UniqueSourcePath">
-        <xs:selector xpath=".//source/path"/>
-        <xs:field xpath="."/>
-    </xs:unique>
-</xs:element>
+    <xs:complexType name="psyncType">
+        <xs:sequence>
+            <xs:element name="options" type="p:optionsType" minOccurs="0"/>
+            <xs:element name="sources" type="p:sourcesType" minOccurs="0"/>
+            <xs:element name="databases" type="p:databasesType" minOccurs="0"/>
+            <xs:element name="pipeline" type="p:pipelineType"/>
+        </xs:sequence>
+    </xs:complexType>
 
-<xs:complexType name="psyncType">
-    <xs:sequence>
-        <xs:element name="options" type="p:optionsType" minOccurs="0"/>
-        <xs:element name="sources" type="p:sourcesType" minOccurs="0"/>
-        <xs:element name="databases" type="p:databasesType" minOccurs="0"/>
-        <xs:element name="pipeline" type="p:pipelineType"/>
-    </xs:sequence>
-</xs:complexType>
+    <xs:complexType name="optionsType">
+        <xs:sequence>
+            <xs:element name="option" type="p:optionType" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
 
-<xs:complexType name="optionsType">
-    <xs:sequence>
-        <xs:element name="option" type="p:optionType" maxOccurs="unbounded"/>
-    </xs:sequence>
-</xs:complexType>
+    <xs:complexType name="optionType">
+        <xs:simpleContent>
+            <xs:extension base="xs:string">
+                <xs:attribute name="name" type="p:optionNameType" use="required"/>
+                <xs:attribute name="root" type="p:BooleanType" use="optional"/>
+            </xs:extension>
+        </xs:simpleContent>
+    </xs:complexType>
 
-<xs:complexType name="optionType">
-    <xs:simpleContent>
-        <xs:extension base="xs:string">
-            <xs:attribute name="name" type="p:optionNameType" use="required"/>
-            <xs:attribute name="root" type="p:BooleanType" use="optional"/>
-        </xs:extension>
-    </xs:simpleContent>
-</xs:complexType>
+    <xs:simpleType name="optionNameType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="git"/>
+            <xs:enumeration value="rsync_options"/>
+            <xs:enumeration value="target"/>
+            <xs:enumeration value="pre_backup_script"/>
+            <xs:enumeration value="post_backup_script"/>
+        </xs:restriction>
+    </xs:simpleType>
 
-<xs:simpleType name="optionNameType">
-    <xs:restriction base="xs:string">
-        <xs:enumeration value="git"/>
-        <xs:enumeration value="rsync_options"/>
-        <xs:enumeration value="target"/>
-        <xs:enumeration value="pre_backup_script"/>
-        <xs:enumeration value="post_backup_script"/>
-    </xs:restriction>
-</xs:simpleType>
+    <xs:simpleType name="BooleanType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="1"/>
+            <xs:enumeration value="yes"/>
+            <xs:enumeration value="true"/>
+            <xs:enumeration value="on"/>
+            <xs:enumeration value="0"/>
+            <xs:enumeration value="no"/>
+            <xs:enumeration value="false"/>
+            <xs:enumeration value="off"/>
+        </xs:restriction>
+    </xs:simpleType>
 
-<xs:simpleType name="BooleanType">
-    <xs:restriction base="xs:string">
-        <xs:enumeration value="1"/>
-        <xs:enumeration value="yes"/>
-        <xs:enumeration value="true"/>
-        <xs:enumeration value="on"/>
-        <xs:enumeration value="0"/>
-        <xs:enumeration value="no"/>
-        <xs:enumeration value="false"/>
-        <xs:enumeration value="off"/>
-    </xs:restriction>
-</xs:simpleType>
+    <xs:complexType name="pipelineType">
+        <xs:sequence>
+            <xs:element name="step" type="p:stepType" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
 
-<xs:complexType name="pipelineType">
-    <xs:sequence>
-        <xs:element name="step" type="p:stepType" maxOccurs="unbounded"/>
-    </xs:sequence>
-</xs:complexType>
+    <xs:complexType name="stepType">
+        <xs:simpleContent>
+            <xs:extension base="p:stepValueType">
+                <xs:attribute name="no" type="xs:integer" use="required"/>
+            </xs:extension>
+        </xs:simpleContent>
+    </xs:complexType>
 
-<xs:complexType name="stepType">
-    <xs:simpleContent>
-        <xs:extension base="p:stepValueType">
-            <xs:attribute name="no" type="xs:integer" use="required"/>
-        </xs:extension>
-    </xs:simpleContent>
-</xs:complexType>
+    <xs:simpleType name="stepValueType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="backup"/>
+            <xs:enumeration value="db_dump"/>
+            <xs:enumeration value="postgres_dump"/>
+            <xs:enumeration value="mysql_dump"/>
+            <xs:enumeration value="pre_backup_script"/>
+            <xs:enumeration value="post_backup_script"/>
+        </xs:restriction>
+    </xs:simpleType>
 
-<xs:simpleType name="stepValueType">
-    <xs:restriction base="xs:string">
-        <xs:enumeration value="backup"/>
-        <xs:enumeration value="db_dump"/>
-        <xs:enumeration value="postgres_dump"/>
-        <xs:enumeration value="mysql_dump"/>
-        <xs:enumeration value="pre_backup_script"/>
-        <xs:enumeration value="post_backup_script"/>
-    </xs:restriction>
-</xs:simpleType>
+    <xs:complexType name="sourcesType">
+        <xs:sequence>
+            <xs:element name="source" type="p:sourceType" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
 
-<xs:complexType name="sourcesType">
-    <xs:sequence>
-        <xs:element name="source" type="p:sourceType" maxOccurs="unbounded"/>
-    </xs:sequence>
-</xs:complexType>
+    <xs:complexType name="sourceType">
+        <xs:sequence>
+            <xs:element name="path" type="xs:string"/>
+            <xs:element name="exclude" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+            <xs:element name="target" type="xs:string" minOccurs="0"/>
+            <xs:element name="rsync_options" type="xs:string" minOccurs="0"/>
+            <xs:element name="post_script" type="xs:string" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
 
-<xs:complexType name="sourceType">
-    <xs:sequence>
-        <xs:element name="path" type="xs:string"/>
-        <xs:element name="exclude" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
-        <xs:element name="target" type="xs:string" minOccurs="0"/>
-        <xs:element name="rsync_options" type="xs:string" minOccurs="0"/>
-        <xs:element name="post_script" type="xs:string" minOccurs="0"/>
-    </xs:sequence>
-</xs:complexType>
+    <xs:complexType name="databasesType">
+        <xs:sequence>
+            <xs:element name="file" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+            <xs:element name="postgresql" type="p:dbsType" minOccurs="0"/>
+            <xs:element name="mysql" type="p:dbsType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
 
-<xs:complexType name="databasesType">
-    <xs:sequence>
-        <xs:element name="file" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
-        <xs:element name="postgresql" type="p:dbsType" minOccurs="0"/>
-        <xs:element name="mysql" type="p:dbsType" minOccurs="0"/>
-    </xs:sequence>
-</xs:complexType>
+    <xs:complexType name="dbsType">
+        <xs:sequence>
+            <xs:element name="db" type="p:dbType" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
 
-<xs:complexType name="dbsType">
-    <xs:sequence>
-        <xs:element name="db" type="p:dbType" maxOccurs="unbounded"/>
-    </xs:sequence>
-</xs:complexType>
-
-<xs:complexType name="dbType">
-    <xs:sequence>
-        <xs:element name="name" type="xs:string"/>
-        <xs:element name="user" type="xs:string"/>
-        <xs:element name="password" type="xs:string" minOccurs="0"/>
-        <xs:element name="pass" type="xs:string" minOccurs="0"/>
-        <xs:element name="options" type="xs:string" minOccurs="0"/>
-        <xs:element name="ssh" type="xs:string" minOccurs="0"/>
-    </xs:sequence>
-</xs:complexType>
-
+    <xs:complexType name="dbType">
+        <xs:sequence>
+            <xs:element name="name" type="xs:string"/>
+            <xs:element name="user" type="xs:string"/>
+            <xs:element name="password" type="xs:string" minOccurs="0"/>
+            <xs:element name="pass" type="xs:string" minOccurs="0"/>
+            <xs:element name="options" type="xs:string" minOccurs="0"/>
+            <xs:element name="ssh" type="xs:string" minOccurs="0"/>
+            <xs:element name="target" type="xs:string" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
 </xs:schema>

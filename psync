@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-		This program is free software: you can redistribute it and/or modify
+    This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     any later version.
@@ -23,477 +23,268 @@ import subprocess
 import sys
 import time
 
-from collections import OrderedDict
-from configparser import RawConfigParser
 from gi.repository import Notify
+from lxml import etree
 from optparse import OptionParser
-from xml.dom import minidom
 
-class MultiOrderedDict(OrderedDict):
-	def __setitem__(self, key, value):
-		if isinstance(value, list) and key in self:
-			self[key].extend(value)
-		else:
-			super(OrderedDict, self).__setitem__(key, value)
-
-rsync_options = ''
-backup_files = []
-target = None
-pipeline = {}
-postgres = []
-mysql = []
-git = True
-git_root = False
-pre_backup_script = ''
-post_backup_script = ''
+NAMESPACE = {'p':'http://jnphilipp.org/psync/'}
+BOOLEAN_STATES = {'1':True, 'yes':True, 'true':True, 'on':True, '0':False, 'no':False, 'false':False, 'off':False}
 
 def send_notification(message):
-	'''send feed updates to notify-osd'''
-	try:
-		notification = Notify.Notification.new('psync', message, 'deja-dup')
-		notification.show()
-	except:
-		print(message)
+    """send messages to notify-osd"""
+    try:
+        notification = Notify.Notification.new('psync', message, 'deja-dup')
+        notification.show()
+    except:
+        print(message)
 
-def load_xml(path):
-	global rsync_options
-	global target
-	global backup_files
-	global pipeline
-	global git
-	global git_root
-	global pre_backup_script
-	global post_backup_script
+def load(path):
+    if not os.path.exists(path):
+        print('xml file "%s" not found. aborting...' % path)
+        sys.exit(1)
+    return etree.parse(path)
 
-	if not os.path.exists(path):
-		print('xml-file not found. aborting...')
-		return
+def check_valid(path, doc):
+    xmlschema = etree.XMLSchema(etree.parse('/usr/share/psync/psync.xsd'))
+    if not xmlschema.validate(doc):
+        print('xml file "%s" not valid. aborting...' % path)
+        sys.exit(1)
 
-	xmldoc = minidom.parse(path)
-	optionlist = xmldoc.getElementsByTagName('options')
-	for s in optionlist:
-		for child in s.childNodes:
-			if child.firstChild != None:
-				if child.attributes['name'].value == 'rsync_options' and child.firstChild != None:
-					rsync_options = child.firstChild.data
-				elif child.attributes['name'].value == 'target' and child.firstChild != None and target == None:
-					target = child.firstChild.data
-				elif child.attributes['name'].value == 'pre_backup_script' and child.firstChild != None:
-					pre_backup_script = child.firstChild.data
-				elif child.attributes['name'].value == 'post_backup_script' and child.firstChild != None:
-					post_backup_script = child.firstChild.data
-				elif child.attributes['name'].value == 'git' and child.firstChild != None:
-					if 'root' in child.attributes:
-						git_root = RawConfigParser.BOOLEAN_STATES[child.attributes['root'].value] if child.attributes['root'].value.lower() in RawConfigParser.BOOLEAN_STATES else False
-					git = RawConfigParser.BOOLEAN_STATES[child.firstChild.data.lower()] if child.firstChild.data.lower() in RawConfigParser.BOOLEAN_STATES else True
+def parse(path, target=None):
+    doc = load(path)
+    check_valid(path, doc)
 
-	backup_files_list = xmldoc.getElementsByTagName('backup_file')
-	for s in backup_files_list:
-		if s.firstChild != None:
-			backup_file = {'source':s.firstChild.data.strip()}
+    options = {'target':None, 'git':True, 'git_root':False}
+    for o in doc.xpath('p:options/*', namespaces=NAMESPACE):
+        options[o.attrib['name'].strip()] = o.text.strip()
 
-			i = 0
-			for child in s.childNodes:
-				if child.nodeName == 'exclude':
-					backup_file['exclude%d' % i] = child.firstChild.data.strip()
-					i += 1
-				elif child.nodeName == 'target':
-					backup_file['target'] = child.firstChild.data.strip()
-				elif child.nodeName == 'rsync_options':
-					backup_file['rsync_options'] = child.firstChild.data.strip()
-				elif child.nodeName == 'post_script':
-					backup_file['post_script'] = child.firstChild.data.strip()
+        if o.attrib['name'].strip() == 'git':
+            options[o.attrib['name'].strip()] = \
+                    BOOLEAN_STATES[o.text.strip().lower()] if \
+                        o.text.strip().lower() in BOOLEAN_STATES else True
+        if o.attrib['name'].strip() == 'git' and \
+                    'root' in o.attrib['name'].strip():
+            options['git_root'] = \
+                    BOOLEAN_STATES[o.attrib['root'].strip()] if \
+                            o.attrib['root'].strip() in BOOLEAN_STATES else True
 
-			backup_files.append(backup_file)
+    if target:
+        options['target'] = target
 
-	pipelinelist = xmldoc.getElementsByTagName('pipe')
-	for s in pipelinelist:
-		pipeline[int(s.attributes['name'].value)] = s.firstChild.data
-		if pipeline[int(s.attributes['name'].value)] == 'backup' and not target:
-			print('No target provided.')
-			sys.exit(1)
+    pipeline = {}
+    for step in doc.xpath('p:pipeline/*', namespaces=NAMESPACE):
+        pipeline[int(step.attrib['no'].strip())] = step.text.strip()
+        if pipeline[int(step.attrib['no'].strip())] == 'backup' and \
+                not options['target']:
+          print('no target provided. aborting...')
+          sys.exit(1)
 
-	databaseslist = xmldoc.getElementsByTagName('databases')
-	for s in databaseslist:
-		for child in s.childNodes:
-			if child.nodeName == 'file':
-				db_doc = minidom.parse(child.firstChild.data)
-				load_xml_databases(db_doc)
+    sources = []
+    for s in doc.xpath('p:sources/*', namespaces=NAMESPACE):
+        source = {'source': s.find('p:path', namespaces=NAMESPACE).text.strip()}
+        if s.find('p:exclude', namespaces=NAMESPACE) is not None:
+            source['exclude'] = [e.text.strip() for e in s.iterfind('p:exclude', namespaces=NAMESPACE)]
+        if s.find('p:target', namespaces=NAMESPACE) is not None:
+            source['target'] = s.find('p:target', namespaces=NAMESPACE).text.strip()
+        if s.find('p:rsync_options', namespaces=NAMESPACE) is not None:
+            source['rsync_options'] = s.find('p:rsync_options', namespaces=NAMESPACE).text.strip()
+        if s.find('p:post_script', namespaces=NAMESPACE) is not None:
+            source['post_script'] = s.find('p:post_script', namespaces=NAMESPACE).text.strip()
+        sources.append(source)
 
-	load_xml_databases(xmldoc)
+    pgsqls = parse_dbs(doc.xpath('p:databases/p:postgresql/*',
+                                namespaces=NAMESPACE))
+    mysqls = parse_dbs(doc.xpath('p:databases/p:mysql/*',
+                                namespaces=NAMESPACE))
+    parse_db_files(doc.xpath('p:databases/p:file',
+                            namespaces=NAMESPACE), mysqls, pgsqls)
+    return (options, sources, mysqls, pgsqls, pipeline)
 
-	if len(pipeline) == 0:
-		if target:
-			pipeline[1] = 'backup'
-		else:
-			print('No target provided.')
-			sys.exit(1)
+def parse_db_files(file_iter, mysqls, pgsqls):
+    for f in file_iter:
+        path = f.text.strip()
+        doc = load(path)
+        check_valid(path, doc)
+        pgsqls += (parse_dbs(doc.xpath('p:databases/p:postgresql/*',
+                                namespaces=NAMESPACE)))
+        mysqls += (parse_dbs(doc.xpath('p:databases/p:mysql/*',
+                                namespaces=NAMESPACE)))
+        parse_db_files(doc.xpath('p:databases/p:file',
+                                namespaces=NAMESPACE), mysqls, pgsqls)
 
-def load_xml_databases(xmldoc):
-	global postgres
-	global mysql
+def parse_dbs(db_iter):
+    dbs = []
+    for c in db_iter:
+        db = {'name': c.find('p:name', namespaces=NAMESPACE).text.strip(),
+                'user': c.find('p:user', namespaces=NAMESPACE).text.strip()}
+        if c.find('p:password', namespaces=NAMESPACE) is not None:
+            db['password'] = c.find('p:password', namespaces=NAMESPACE).text.strip()
+        if c.find('p:pass', namespaces=NAMESPACE) is not None:
+            db['pass'] = c.find('p:pass', namespaces=NAMESPACE).text.strip()
+        if c.find('p:target', namespaces=NAMESPACE) is not None:
+            db['target'] = c.find('p:target', namespaces=NAMESPACE).text.strip()
+        if c.find('p:options', namespaces=NAMESPACE) is not None:
+            db['options'] = c.find('p:options', namespaces=NAMESPACE).text.strip()
+        if c.find('p:ssh', namespaces=NAMESPACE) is not None:
+            db['ssh'] = c.find('p:ssh', namespaces=NAMESPACE).text.strip()
+        dbs.append(db)
+    return dbs
 
-	postgresqllist = xmldoc.getElementsByTagName('postgresql')
-	for postgresql in postgresqllist:
-		for s in postgresql.childNodes:
-			if s.firstChild != None:
-				db = dict()
-				for child in s.childNodes:
-					if child.nodeName == 'name':
-						db['name'] = child.firstChild.data
-					elif child.nodeName == 'user':
-						db['user'] = child.firstChild.data
-					elif child.nodeName == 'pass':
-						db['pass'] = child.firstChild.data if child.firstChild != None else ''
-					elif child.nodeName == 'password':
-						db['password'] = child.firstChild.data if child.firstChild != None else ''
-					elif child.nodeName == 'target':
-						db['target'] = child.firstChild.data
-					elif child.nodeName == 'options':
-						db['options'] = child.firstChild.data
-					elif child.nodeName == 'ssh':
-						db['ssh'] = child.firstChild.data
-				postgres.append(db)
+def backup(options, sources, snapshot, root):
+    print('--------------------------------------------------------------------------------')
+    hostname = socket.gethostname()
 
-	mysqllist = xmldoc.getElementsByTagName('mysql')
-	for m in mysqllist:
-		for s in m.childNodes:
-			if s.firstChild != None:
-				db = dict()
-				for child in s.childNodes:
-					if child.nodeName == 'name':
-						db['name'] = child.firstChild.data
-					elif child.nodeName == 'user':
-						db['user'] = child.firstChild.data
-					elif child.nodeName == 'pass':
-						db['pass'] = child.firstChild.data if child.firstChild != None else ''
-					elif child.nodeName == 'password':
-						db['password'] = child.firstChild.data if child.firstChild != None else ''
-					elif child.nodeName == 'target':
-						db['target'] = child.firstChild.data
-					elif child.nodeName == 'options':
-						db['options'] = child.firstChild.data
-					elif child.nodeName == 'ssh':
-						db['ssh'] = child.firstChild.data
-				mysql.append(db)
+    base_dirs = set()
+    for source in sources:
+        send_notification('starting backup of "%s".' % source['source'])
+        print('backup of: %s' % source['source'])
 
-def load_properties(path):
-	global rsync_options
-	global target
-	global backup_files
-	global pipeline
-	global postgres
-	global mysql
-	global git
-	global pre_backup_script
-	global post_backup_script
-	global remote
+        exclude = ''
+        if 'exclude' in source:
+            print('excluding: %s' % ' '.join('"%s"' % exclude for exclude in source['exclude']))
+            exclude = ' '.join('--exclude="%s"' % exclude for exclude in source['exclude'])
+        current_rsync_options = source['rsync_options'] if 'rsync_options' in source else options['rsync_options']
+        current_target = source['target'] if 'target' in source else options['target']
 
-	if not os.path.exists(path):
-		print('properties-file not found. aborting...')
-		return
+        match = re.match(r'^([^/]+@)?[^/]+:', source['source'])
+        if match:
+            print('is remote: %s' % source['source'])
+            base_dirs.add('%s/%s' % (current_target, match.group(0)[:-1]))
+            current_target += '/%s' % re.sub(r'^([^/]+@)?[^/]+:', '%s/Files' % match.group(0)[:-1], source['source'])
+        else:
+            base_dirs.add('%s/%s' % (current_target, hostname))
+            current_target += '/%s/Files%s' % (hostname, source['source'] if os.path.isdir(source['source']) else os.path.dirname(source['source']))
 
-	config = RawConfigParser(dict_type=MultiOrderedDict)
-	config.read([path])
+        if not os.path.exists(current_target):
+            os.makedirs(current_target)
 
-	if config.has_section('options'):
-		if config.has_option('options', 'target') and target == None:
-			target = config.get('options', 'target')[0]
-		if config.has_option('options', 'rsync_options'):
-			rsync_options = config.get('options', 'rsync_options')[0]
-		if config.has_option('options', 'pre_backup_script'):
-			pre_backup_script = config.get('options', 'pre_backup_script')[0]
-		if config.has_option('options', 'post_backup_script'):
-			post_backup_script = config.get('options', 'post_backup_script')[0]
-		if config.has_option('options', 'git'):
-			git = config.BOOLEAN_STATES[config.get('options', 'git')[0].lower()] if config.get('options', 'git')[0].lower() in config.BOOLEAN_STATES else True
-		if config.has_option('options', 'root_git'):
-			git = config.BOOLEAN_STATES[config.get('options', 'root_git')[0].lower()] if config.get('options', 'root_git')[0].lower() in config.BOOLEAN_STATES else True
+        rsync = 'rsync %s %s %s %s' % (exclude, current_rsync_options, '%s/' % source['source'] if os.path.isdir(source['source']) else source['source'], current_target)
+        print(rsync)
+        os.system(rsync)
 
-	i = 1
-	while config.has_section('backup%d' % i):
-		backup_file = {'source':config.get('backup%d' % i, 'source')[0]}
+        if 'post_script' in source:
+            print('--------------------------------------------------------------------------------')
+            send_notification('start post script "%s".' % source['post_script'])
+            print('start post script "%s".'  % source['post_script'])
+            os.system(source['post_script'])
+        print('--------------------------------------------------------------------------------')
 
-		if config.has_option('backup%d' % i, 'exclude'):
-			excludes = config.get('backup%d' % i, 'exclude')[0].split(',')
-			j = 0
-			for exclude in excludes:
-				backup_file['exclude%d' % j] = exclude
-				j += 1
-		if config.has_option('backup%d' % i, 'target'):
-			backup_file['target'] = config.get('backup%d' % i, 'target')[0]
-		if config.has_option('backup%d' % i, 'rsync_options'):
-			backup_file['rsync_options'] = config.get('backup%d' % i, 'rsync_options')[0]
-		if config.has_option('backup%d' % i, 'post_script'):
-			backup_file['post_script'] = config.get('backup%d' % i, 'post_script')[0]
+    if 'git' in options and options['git']:
+        timestamp = time.strftime('%Y-%m-%dT%H:%M:%S%z', time.localtime())
+        for base_dir in base_dirs:
+            print('commit changes in "%s"' % base_dir)
+            os.chdir('%s/Files' % base_dir)
+            if not os.system('git rev-parse') == 0:
+                os.system('git init')
+            os.system('%sgit add -A' % ('sudo ' if root or ('git_root' in options and options['git_root']) else ''))
+            os.system("%sgit commit -m 'backup from %s.'" % ('sudo ' if root or ('git_root' in options and options['git_root']) else '', timestamp))
+            print('--------------------------------------------------------------------------------')
 
-		backup_files.append(backup_file)
-		i += 1
+    if snapshot:
+        t = time.localtime()
+        timestamp = time.strftime('%Y%m%dT%H%M%S%z', t)
+        for base_dir in base_dirs:
+            send_notification('taking snapshot of "%s".' % base_dir)
+            print('taking snapshot of: "%s"' % base_dir)
 
-	if config.has_section('options'):
-		if config.has_option('options', 'target'):
-			db_config = RawConfigParser(dict_type=MultiOrderedDict)
-			db_config.read([path])
-			load_properties_databases(db_config)
+            if not os.path.exists('%s/Snapshots' % base_dir):
+                os.makedirs('%s/Snapshots' % base_dir)
+            os.chdir('%s/Files' % base_dir)
+            if 'git' in options and options['git']:
+                os.system("%sgit tag -a v%s -m '%s'" % ('sudo ' if root or ('git_root' in options and options['git_root']) else '', timestamp, time.strftime('snapshot from %d. %B %Y %H:%M:%S%z.', t)))
+            os.system("%s tar -czf ../Snapshots/%s.tar.gz * .??*" % ('sudo' if root else '', timestamp))
+            print('--------------------------------------------------------------------------------')
 
-	load_properties_databases(config)
-
-	if config.has_section('pipeline'):
-		i = 1
-		while config.has_option('pipeline', str(i)):
-			pipeline[i] = config.get('pipeline', str(i))[0]
-			if pipeline[i] == 'backup' and not target:
-				print('No target provided.')
-				sys.exit(1)
-			i += 1
-
-	if len(pipeline) == 0:
-		if target:
-			pipeline[1] = 'backup'
-		else:
-			print('No target provided.')
-			sys.exit(1)
-
-
-def load_properties_databases(config):
-	global postgres
-	global mysql
-
-	i = 1
-	while config.has_section('postgresql%d' % i):
-		db = dict()
-
-		if config.has_option('db%d' % i, 'name'):
-			db['name'] = config.get('db%d' % i, 'name')[0]
-		if config.has_option('db%d' % i, 'user'):
-			db['user'] = config.get('db%d' % i, 'user')[0]
-		if config.has_option('db%d' % i, 'pass'):
-			db['pass'] = config.get('db%d' % i, 'pass')[0]
-		if config.has_option('db%d' % i, 'password'):
-			db['password'] = config.get('db%d' % i, 'password')[0]
-		if config.has_option('db%d' % i, 'options'):
-			db['options'] = config.get('db%d' % i, 'options')[0]
-		if config.has_option('db%d' % i, 'target'):
-			db['target'] = config.get('db%d' % i, 'target')[0]
-		if config.has_option('db%d' % i, 'ssh'):
-			db['ssh'] = config.get('db%d' % i, 'ssh')[0]
-
-		i += 1
-		postgres.append(db)
-
-	i = 1
-	while config.has_section('mysql%d' % i):
-		db = dict()
-
-		if config.has_option('db%d' % i, 'name'):
-			db['name'] = config.get('db%d' % i, 'name')[0]
-		if config.has_option('db%d' % i, 'user'):
-			db['user'] = config.get('db%d' % i, 'user')[0]
-		if config.has_option('db%d' % i, 'pass'):
-			db['pass'] = config.get('db%d' % i, 'pass')[0]
-		if config.has_option('db%d' % i, 'password'):
-			db['password'] = config.get('db%d' % i, 'password')[0]
-		if config.has_option('db%d' % i, 'options'):
-			db['options'] = config.get('db%d' % i, 'options')[0]
-		if config.has_option('db%d' % i, 'target'):
-			db['target'] = config.get('db%d' % i, 'target')[0]
-		if config.has_option('db%d' % i, 'ssh'):
-			db['ssh'] = config.get('db%d' % i, 'ssh')[0]
-
-		i += 1
-		mysql.append(db)
-
-
-def backup(snapshot, root):
-	global rsync_options
-	global target
-	global git
-	global git_root
-
-	print('--------------------------------------------------------------------------------')
-	hostname = socket.gethostname()
-
-	base_dirs = set()
-	for files in backup_files:
-		send_notification('Start backup of "%s".' % files['source'])
-		print('Backup of: %s' % files['source'])
-
-		excludes = ''
-		exclude = ''
-		current_rsync_options = rsync_options
-		current_target = target
-		for key, value in files.items():
-			if key.startswith('exclude'):
-				excludes += value + ', '
-				exclude += ' --exclude=' + value
-			elif key == 'rsync_options':
-				current_rsync_options = value
-			elif key == 'target':
-				current_target = value
-
-		if len(excludes) > 0:
-			print('Exclude: %s' % excludes[0:len(excludes) - 2])
-
-		match = re.match(r'^([^/]+@)?[^/]+:', files['source'])
-		if match:
-			print('is remote: %s' % files['source'])
-			base_dirs.add('%s/%s' % (current_target, match.group(0)[:-1]))
-			current_target += '/%s' % re.sub(r'^([^/]+@)?[^/]+:', '%s/Files' % match.group(0)[:-1], files['source'])
-		else:
-			base_dirs.add('%s/%s' % (current_target, hostname))
-			current_target += '/%s/Files%s' % (hostname, files['source'] if os.path.isdir(files['source']) else os.path.dirname(files['source']))
-
-		if not os.path.exists(current_target):
-			os.makedirs(current_target)
-
-		rsync = 'rsync %s %s %s %s' % (exclude, current_rsync_options, '%s/' % files['source'] if os.path.isdir(files['source']) else files['source'], current_target)
-		print(rsync)
-		os.system(rsync)
-
-		if 'post_script' in files:
-			send_notification('Start post script.')
-			print('Start post script.')
-			os.system(files['post_script'])
-		print('--------------------------------------------------------------------------------')
-
-	if git:
-		timestamp = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())
-		for base_dir in base_dirs:
-			print('Commit changes in %s' % base_dir)
-			os.chdir('%s/Files' % base_dir)
-			if not os.system('git rev-parse') == 0:
-				os.system('git init')
-			os.system('%sgit add -A' % ('sudo ' if root or git_root else ''))
-			os.system("%sgit commit -m 'Backup from %s.'" % ('sudo ' if root or git_root else '', timestamp))
-			print('--------------------------------------------------------------------------------')
-
-	if snapshot:
-		t = time.localtime()
-		timestamp = time.strftime('%Y%m%dT%H%M%S', t)
-		for base_dir in base_dirs:
-			send_notification('Making snapshot of "%s".' % base_dir)
-			print('Snapshot of: %s' % base_dir)
-
-			if not os.path.exists('%s/Snapshots' % base_dir):
-				os.makedirs('%s/Snapshots' % base_dir)
-			os.chdir('%s/Files' % base_dir)
-			if git:
-				os.system("%sgit tag -a v%s -m '%s'" % ('sudo ' if root or git_root else '', timestamp, time.strftime('Snapshot from %d. %B %Y %H:%M:%S.', t)))
-			os.system("%s tar -czf ../Snapshots/%s.tar.gz * .??*" % ('sudo' if root else '', timestamp))
-			print('--------------------------------------------------------------------------------')
-
-def run_pre_backup_script():
-	if not pre_backup_script:
-		return
-
-	print('--------------------------------------------------------------------------------')
-	os.system(pre_backup_script)
-	print('--------------------------------------------------------------------------------')
-
-def run_post_backup_script():
-	if not post_backup_script:
-		return
-
-	print('--------------------------------------------------------------------------------')
-	send_notification('Start post backup script.')
-	os.system(post_backup_script)
-	print('--------------------------------------------------------------------------------')
+def run_script(script):
+    print('--------------------------------------------------------------------------------')
+    send_notification('Start script "%s".' % script)
+    print('starting script "%s".' % script)
+    os.system(script)
+    print('--------------------------------------------------------------------------------')
 
 def _pass(path):
-	if path:
-		proc = subprocess.Popen('pass %s' % path, stdout=subprocess.PIPE, shell=True)
-		(out, err) = proc.communicate()
-		return out.decode('utf-8').split('\n')[0]
-	else:
-		return ''
+    if path:
+        proc = subprocess.Popen('pass %s' % path, stdout=subprocess.PIPE, shell=True)
+        (out, err) = proc.communicate()
+        return out.decode('utf-8').split('\n')[0]
+    else:
+        return ''
 
-def postgres_dump():
-	global postgres
-	global target
+def postgres_dump(options, pgsqls):
+    print('--------------------------------------------------------------------------------')
+    print('start dumping of PostgreSQL databases.')
+    send_notification('start dumping backup of PostgreSQL databases.')
 
-	print('--------------------------------------------------------------------------------')
-	print('Start backup of PostgreSQL databases.')
-	send_notification('Start backup of PostgreSQL databases.')
+    timestamp = time.strftime('%Y%m%dT%H%M%S%z', time.localtime())
+    for db in pgsqls:
+        print('backup of: "%s"' % db['name'])
+        current_target = db['target'] if 'target' in db else '%s/%s/DBDumps/PostgreSQL/%s' % (options['target'], db['ssh'] if 'ssh' in db else socket.gethostname(), db['name'])
 
-	timestamp = time.strftime('%Y%m%dT%H%M%S', time.localtime())
-	for db in postgres:
-		print('Backup of: %s' % db['name'])
-		current_target = '%s/%s/DBDumps/PostgreSQL/%s' % (target, db['ssh'] if 'ssh' in db else socket.gethostname(), db['name'])
-		if 'target' in db:
-			current_target = db['target']
+        if not os.path.exists(current_target):
+            os.makedirs(current_target)
 
-		if not os.path.exists(current_target):
-			os.makedirs(current_target)
+        password = _pass(db['pass']) if 'pass' in db else db['password']
+        os.system('%sPGPASSWORD=%s pg_dump --username=%s %s %s | gzip -c > %s' % ('ssh %s ' % db['ssh'] if 'ssh' in db else '', password, db['user'], db['options'] if 'options' in db else '', db['name'], os.path.join(current_target, '%s_%s.sql.gz' % (db['name'], timestamp))))
+    print('--------------------------------------------------------------------------------')
 
-		password = _pass(db['pass']) if 'pass' in db else db['password']
-		os.system('%sPGPASSWORD=%s pg_dump --username=%s %s %s | gzip -c > %s' % ('ssh %s ' % db['ssh'] if 'ssh' in db else '', password, db['user'], db['options'] if 'options' in db else '', db['name'], os.path.join(current_target, '%s_%s.sql.gz' % (db['name'], timestamp))))
-	print('--------------------------------------------------------------------------------')
+def mysql_dump(options, mysqls):
+    print('--------------------------------------------------------------------------------')
+    print('start dumping of MySQL databases.')
+    send_notification('start dumping of MySQL databases.')
 
-def mysql_dump():
-	global mysql
-	global target
+    timestamp = time.strftime('%Y%m%dT%H%M%S%z', time.localtime())
+    for db in mysqls:
+        print('backup of: "%s"' % db['name'])
+        current_target = db['target'] if 'target' in db else '%s/%s/DBDumps/MySQL/%s' % (target, db['ssh'] if 'ssh' in db else socket.gethostname(), db['name'])
 
-	print('--------------------------------------------------------------------------------')
-	print('Start backup of MySQL databases.')
-	send_notification('Start backup of MySQL databases.')
+        if not os.path.exists(current_target):
+            os.makedirs(current_target)
 
-	timestamp = time.strftime('%Y%m%dT%H%M%S', time.localtime())
-	for db in mysql:
-		print('Backup of: %s' % db['name'])
-		current_target = '%s/%s/DBDumps/MySQL/%s' % (target, db['ssh'] if 'ssh' in db else socket.gethostname(), db['name'])
-		if 'target' in db:
-			current_target = db['target']
-
-		if not os.path.exists(current_target):
-			os.makedirs(current_target)
-
-		password = _pass(db['pass']) if 'pass' in db else db['password']
-		os.system('%smysqldump --user=%s --password=%s %s %s | gzip -c > %s' % ('ssh %s ' % db['ssh'] if 'ssh' in db else '', db['user'], password, db['options'] if 'options' in db else '', db['name'], os.path.join(current_target, '%s_%s.sql.gz' % (db['name'], timestamp))))
-	print('--------------------------------------------------------------------------------')
+        password = _pass(db['pass']) if 'pass' in db else db['password']
+        os.system('%smysqldump --user=%s --password=%s %s %s | gzip -c > %s' % ('ssh %s ' % db['ssh'] if 'ssh' in db else '', db['user'], password, db['options'] if 'options' in db else '', db['name'], os.path.join(current_target, '%s_%s.sql.gz' % (db['name'], timestamp))))
+    print('--------------------------------------------------------------------------------')
 
 def run():
-	global pipeline
-	global target
-	global git
+    usage = 'usage: %prog [options]'
+    parser = OptionParser(usage)
+    parser.add_option('-t', '--target', action='store', type='string', dest='target')
+    parser.add_option('-x', '--xml', action='store', type='string', dest='xml')
+    parser.add_option('-v', '--is_valid', action='store_true', dest='check_valid', help='checks the given xml file on valid')
+    parser.add_option('-d', '--no-database', action='store_true', dest='database', help='disables database dump')
+    parser.add_option('-n', '--no-postgres', action='store_true', dest='postgres', help='disables PostgreSQL dump')
+    parser.add_option('-m', '--no-mysql', action='store_true', dest='mysql', help='disables MySQL dump')
+    parser.add_option('-s', '--snapshot', action='store_true', dest='snapshot', help='make snapshot')
+    parser.add_option('-r', '--root', action='store_true', dest='root', help='make snapshot and git add as root')
+    (cmd_options, cmd_args) = parser.parse_args()
 
-	usage = 'usage: %prog [options]'
-	parser = OptionParser(usage)
-	parser.add_option('-t', '--target', action='store', type='string', dest='target')
-	parser.add_option('-x', '--xml', action='store', type='string', dest='xml')
-	parser.add_option('-p', '--properties', action='store', type='string', dest='properties')
-	parser.add_option('-d', '--no-database', action='store_true', dest='database', help='disables database dump')
-	parser.add_option('-n', '--no-postgres', action='store_true', dest='postgres', help='disables PostgreSQL dump')
-	parser.add_option('-m', '--no-mysql', action='store_true', dest='mysql', help='disables MySQL dump')
-	parser.add_option('-s', '--snapshot', action='store_true', dest='snapshot', help='make snapshot')
-	parser.add_option('-r', '--root', action='store_true', dest='root', help='make snapshot and git add as root')
-	(options, args) = parser.parse_args()
+    if cmd_options.xml != None:
+        if cmd_options.check_valid:
+            check_valid(cmd_options.xml, load(cmd_options.xml))
+            print('xml file "%s" is valid.' % cmd_options.xml)
+            sys.exit(0)
+        else:
+            options, sources, mysqls, pgsqls, pipeline = \
+                    parse(cmd_options.xml, cmd_options.target)
+    else:
+        parser.print_help()
 
-	if options.target != None:
-		target = options.target
-	if options.xml != None:
-		load_xml(options.xml)
-	elif options.properties != None:
-		load_properties(options.properties)
-	else:
-		parser.print_help()
-
-	for k, v in sorted(pipeline.items()):
-		if v == 'backup':
-			backup(options.snapshot, options.root)
-		elif v == 'db_dump' and not options.database:
-			if not options.mysql:
-				mysql_dump()
-			if not options.postgres:
-				postgres_dump()
-		elif v == 'postgres_dump' and not (options.postgres or options.database):
-			postgres_dump()
-		elif v == 'mysql_dump' and not (options.mysql or options.database):
-			mysql_dump()
-		elif v == 'pre_backup_script':
-			run_pre_backup_script()
-		elif v == 'post_backup_script':
-			run_post_backup_script()
+    for k, v in sorted(pipeline.items()):
+        if v == 'backup':
+            backup(options, sources, cmd_options.snapshot, cmd_options.root)
+        elif v == 'db_dump' and not cmd_options.database:
+            if not cmd_options.mysql:
+                mysql_dump(options, mysqls)
+            if not cmd_options.postgres:
+                postgres_dump(options, pgsqls)
+        elif v == 'postgres_dump' and not (cmd_options.postgres or cmd_options.database):
+            postgres_dump(options, pgsqls)
+        elif v == 'mysql_dump' and not (cmd_options.mysql or cmd_options.database):
+            mysql_dump(options, mysqls)
+        elif v == 'pre_backup_script':
+            run_script(options['pre_backup_script'])
+        elif v == 'post_backup_script':
+            run_script(options['pre_backup_script'])
 
 if __name__ == '__main__':
-	Notify.init('psync')
-	run()
+    Notify.init('psync')
+    run()

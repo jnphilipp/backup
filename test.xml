@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<psync xmlns="http://jnphilipp.org/psync/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jnphilipp.org/ http://jnphilipp.org/psync/psync.xsd">
+<psync xmlns="http://jnphilipp.org/psync/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jnphilipp.org/psync/ http://jnphilipp.org/psync/psync.xsd">
     <options>
         <option name="rsync_options">--delete -auPz</option>
-        <option name="target">/media/backup</option>
         <option name="git" root="yes">no</option>
     </options>
     <sources>
@@ -14,9 +13,14 @@
         <source>
             <path>/var/www</path>
         </source>
+        <source>
+            <path>/var/www</path>
+            <target>/media/backup2/</target>
+        </source>
     </sources>
     <databases>
-        <file>databases.xml</file>
+        <file>dbs0.xml</file>
+        <file>dbs1.xml</file>
         <postgresql>
             <db>
                 <name>db_name</name>
