@@ -1,47 +1,57 @@
-<backup>
-	<options>
-		<option name="source">/</option>
-		<option name="target">/media/backup</option>
-		<option name="rsync_options">--delete -aucPz</option>
-		<option name="git" root="yes">no</option>
-	</options>
-	<backup_files>
-		<backup_file>/home/jnphilipp/Documents/Texte
-			<exclude>epub</exclude>
-			<exclude>*.odt</exclude>
-		</backup_file>
-		<backup_file>/home/jnphilipp/Documents/sons
-			<exclude>'not importand'</exclude>
-		</backup_file>
-		<backup_file>/var/www
-			<exclude>Library</exclude>
-		</backup_file>
-	</backup_files>
-	<databases>
-		<file>databases.xml</file>
-		<postgresql>
-			<db>
-				<name>db_name</name>
-				<user>USER</user>
-				<password>PASSWORD</password>
-				<options>OPTIONS</options>
-				<ssh>USER@SERVER</ssh>
-				<target>/media/backup/PostgreSQL</target>
-			</db>
-		</postgresql>
-		<mysql>
-			<db>
-				<name>db_name</name>
-				<user>USER</user>
-				<password>PASSWORD</password>
-				<options>OPTIONS</options>
-				<ssh>USER@SERVER</ssh>
-				<target>/media/backup/MySQL</target>
-			</db>
-		</mysql>
-	</databases>
-	<pipeline>
-		<pipe name="1">db_dump</pipe>
-		<pipe name="2">backup</pipe>
-	</pipeline>
-</backup>
+<?xml version="1.0" encoding="UTF-8"?>
+<psync xmlns="http://jnphilipp.org/psync/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jnphilipp.org/ http://jnphilipp.org/psync/psync.xsd">
+    <options>
+        <option name="rsync_options">--delete -auPz</option>
+        <option name="target">/media/backup</option>
+        <option name="git" root="yes">no</option>
+    </options>
+    <sources>
+        <source>
+            <path>/home</path>
+            <exclude>.cache</exclude>
+            <exclude>*.mkv</exclude>
+        </source>
+        <source>
+            <path>/var/www</path>
+        </source>
+    </sources>
+    <databases>
+        <file>databases.xml</file>
+        <postgresql>
+            <db>
+                <name>db_name</name>
+                <user>USER</user>
+                <password>PASSWORD</password>
+                <options>OPTIONS</options>
+                <ssh>USER@SERVER</ssh>
+            </db>
+            <db>
+                <name>db_name</name>
+                <user>USER</user>
+                <pass>PASSWORD</pass>
+                <options>OPTIONS</options>
+            </db>
+        </postgresql>
+        <mysql>
+            <db>
+                <name>db_name</name>
+                <user>USER</user>
+                <password>PASSWORD</password>
+                <options>OPTIONS</options>
+                <ssh>USER@SERVER</ssh>
+                <target>/media/backup/MySQL</target>
+            </db>
+            <db>
+                <name>db_name</name>
+                <user>USER</user>
+                <pass>PASSWORD</pass>
+                <options>OPTIONS</options>
+                <target>/media/backup/MySQL</target>
+            </db>
+        </mysql>
+    </databases>
+    <pipeline>
+        <step no="1">db_dump</step>
+        <step no="2">backup</step>
+    </pipeline>
+</psync>

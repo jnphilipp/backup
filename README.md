@@ -3,7 +3,8 @@
 Python wrapper for rsync to easily configure rsync.
 
 ##Features
- * Configure complex rsync backups voer xml/properties
+ * Configure complex rsync backups over xml
+ * XML schema validation
  * Pre and post backup script
  * Database dumps for MySQL and PostgreSQL
  * configurable pipeline
