@@ -80,8 +80,18 @@ def parse(path, target=None):
           print('no target provided. aborting...')
           sys.exit(1)
 
+    sources = parse_sources(doc)
+    pgsqls = parse_dbs(doc.xpath('p:databases/p:postgresql/*',
+                                namespaces=NAMESPACE))
+    mysqls = parse_dbs(doc.xpath('p:databases/p:mysql/*',
+                                namespaces=NAMESPACE))
+    parse_db_files(doc.xpath('p:databases/p:file',
+                            namespaces=NAMESPACE), mysqls, pgsqls)
+    return (options, sources, mysqls, pgsqls, pipeline)
+
+def parse_sources(doc):
     sources = []
-    for s in doc.xpath('p:sources/*', namespaces=NAMESPACE):
+    for s in doc.xpath('p:sources/p:source', namespaces=NAMESPACE):
         source = {'source': s.find('p:path', namespaces=NAMESPACE).text.strip()}
         if s.find('p:exclude', namespaces=NAMESPACE) is not None:
             source['exclude'] = [e.text.strip() for e in s.iterfind('p:exclude',
@@ -97,13 +107,13 @@ def parse(path, target=None):
                                             namespaces=NAMESPACE).text.strip()
         sources.append(source)
 
-    pgsqls = parse_dbs(doc.xpath('p:databases/p:postgresql/*',
-                                namespaces=NAMESPACE))
-    mysqls = parse_dbs(doc.xpath('p:databases/p:mysql/*',
-                                namespaces=NAMESPACE))
-    parse_db_files(doc.xpath('p:databases/p:file',
-                            namespaces=NAMESPACE), mysqls, pgsqls)
-    return (options, sources, mysqls, pgsqls, pipeline)
+    for f in doc.xpath('p:sources/p:file', namespaces=NAMESPACE):
+        fdoc = load(f.text.strip())
+        check_valid(f.text.strip(), fdoc)
+        s = parse_sources(fdoc)
+        sources += s
+    return sources
+
 
 def parse_db_files(file_iter, mysqls, pgsqls):
     for f in file_iter:
