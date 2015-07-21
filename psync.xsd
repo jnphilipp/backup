@@ -26,28 +26,29 @@
 
     <xs:complexType name="optionsType">
         <xs:sequence>
-            <xs:element name="option" type="p:optionType" maxOccurs="unbounded"/>
+            <xs:element name="git" type="p:gitType" minOccurs="0"/>
+            <xs:element name="rsync" type="p:rootStrType" minOccurs="0"/>
+            <xs:element name="target" type="xs:string" minOccurs="0"/>
+            <xs:element name="pre_backup_script" type="xs:string" minOccurs="0"/>
+            <xs:element name="post_backup_script" type="xs:string" minOccurs="0"/>
         </xs:sequence>
     </xs:complexType>
 
-    <xs:complexType name="optionType">
+    <xs:complexType name="gitType">
         <xs:simpleContent>
-            <xs:extension base="xs:string">
-                <xs:attribute name="name" type="p:optionNameType" use="required"/>
+            <xs:extension base="p:BooleanType">
                 <xs:attribute name="root" type="p:BooleanType" use="optional"/>
             </xs:extension>
         </xs:simpleContent>
     </xs:complexType>
 
-    <xs:simpleType name="optionNameType">
-        <xs:restriction base="xs:string">
-            <xs:enumeration value="git"/>
-            <xs:enumeration value="rsync_options"/>
-            <xs:enumeration value="target"/>
-            <xs:enumeration value="pre_backup_script"/>
-            <xs:enumeration value="post_backup_script"/>
-        </xs:restriction>
-    </xs:simpleType>
+    <xs:complexType name="rootStrType">
+        <xs:simpleContent>
+            <xs:extension base="xs:string">
+                <xs:attribute name="root" type="p:BooleanType" use="optional"/>
+            </xs:extension>
+        </xs:simpleContent>
+    </xs:complexType>
 
     <xs:simpleType name="BooleanType">
         <xs:restriction base="xs:string">
@@ -89,7 +90,7 @@
 
     <xs:complexType name="sourcesType">
         <xs:sequence>
-            <xs:element name="file" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+            <xs:element name="file" type="p:rootStrType" minOccurs="0" maxOccurs="unbounded"/>
             <xs:element name="source" type="p:sourceType" minOccurs="0" maxOccurs="unbounded"/>
         </xs:sequence>
     </xs:complexType>
@@ -99,7 +100,7 @@
             <xs:element name="path" type="xs:string"/>
             <xs:element name="exclude" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
             <xs:element name="target" type="xs:string" minOccurs="0"/>
-            <xs:element name="rsync_options" type="xs:string" minOccurs="0"/>
+            <xs:element name="rsync" type="p:rootStrType" minOccurs="0"/>
             <xs:element name="post_script" type="xs:string" minOccurs="0"/>
         </xs:sequence>
     </xs:complexType>

@@ -31,6 +31,9 @@ NAMESPACE = {'p':'http://jnphilipp.org/psync/'}
 BOOLEAN_STATES = {'1':True, 'yes':True, 'true':True, 'on':True,
                     '0':False, 'no':False, 'false':False, 'off':False}
 
+def get_boolean(string, default=False):
+    return BOOLEAN_STATES[string] if string in BOOLEAN_STATES else default
+
 def send_notification(message):
     """send messages to notify-osd"""
     try:
@@ -46,28 +49,39 @@ def load(path):
     return etree.parse(path)
 
 def check_valid(path, doc):
-    xmlschema = etree.XMLSchema(etree.parse('/usr/share/psync/psync.xsd'))
+    xmlschema = etree.XMLSchema(etree.parse('psync.xsd'))
+    # xmlschema = etree.XMLSchema(etree.parse('/usr/share/psync/psync.xsd'))
     if not xmlschema.validate(doc):
         print('xml file "%s" not valid. aborting...' % path)
+        xmlschema.assertValid(doc)
         sys.exit(1)
 
 def parse(path, target=None):
     doc = load(path)
     check_valid(path, doc)
 
-    options = {'target':None, 'git':True, 'git_root':False}
-    for o in doc.xpath('p:options/*', namespaces=NAMESPACE):
-        options[o.attrib['name'].strip()] = o.text.strip()
-
-        if o.attrib['name'].strip() == 'git':
-            options[o.attrib['name'].strip()] = \
-                    BOOLEAN_STATES[o.text.strip().lower()] if \
-                        o.text.strip().lower() in BOOLEAN_STATES else True
-        if o.attrib['name'].strip() == 'git' and \
-                    'root' in o.attrib:
-            options['git_root'] = \
-                    BOOLEAN_STATES[o.attrib['root'].strip()] if \
-                            o.attrib['root'].strip() in BOOLEAN_STATES else True
+    options = {'target':None, 'git':True, 'git_root':False, 'rsync_root':False}
+    if doc.find('p:options/p:git', namespaces=NAMESPACE) is not None:
+        o = doc.find('p:options/p:git', namespaces=NAMESPACE)
+        options['git'] = get_boolean(o.text.strip(), True)
+        if 'root' in o.attrib:
+            options['git_root'] = get_boolean(o.attrib['root'].strip(), True)
+    if doc.find('p:options/p:rsync', namespaces=NAMESPACE) is not None:
+        o = doc.find('p:options/p:rsync', namespaces=NAMESPACE)
+        options['rsync'] = o.text.strip()
+        if 'root' in o.attrib:
+            options['rsync_root'] = get_boolean(o.attrib['root'].strip(), False)
+    if doc.find('p:options/p:target', namespaces=NAMESPACE) is not None:
+        options['target'] = doc.find('p:options/p:target',
+                                        namespaces=NAMESPACE).text.strip()
+    if doc.find('p:options/p:pre_backup_script',
+                namespaces=NAMESPACE) is not None:
+        options['pre_backup_script'] = doc.find('p:options/p:pre_backup_script',
+                                            namespaces=NAMESPACE).text.strip()
+    if doc.find('p:options/p:post_backup_script',
+                namespaces=NAMESPACE) is not None:
+        options['post_backup_script'] = doc.find('p:options/p:post_backup_script',
+                                            namespaces=NAMESPACE).text.strip()
 
     if target:
         options['target'] = target
@@ -99,9 +113,11 @@ def parse_sources(doc):
         if s.find('p:target', namespaces=NAMESPACE) is not None:
             source['target'] = s.find('p:target',
                                         namespaces=NAMESPACE).text.strip()
-        if s.find('p:rsync_options', namespaces=NAMESPACE) is not None:
-            source['rsync_options'] = s.find('p:rsync_options',
-                                            namespaces=NAMESPACE).text.strip()
+        if s.find('p:rsync', namespaces=NAMESPACE) is not None:
+            o = s.find('p:rsync', namespaces=NAMESPACE)
+            source['rsync'] = o.text.strip()
+            if 'root' in o.attrib:
+                source['root'] = get_boolean(o.attrib['root'].strip(), False)
         if s.find('p:post_script', namespaces=NAMESPACE) is not None:
             source['post_script'] = s.find('p:post_script',
                                             namespaces=NAMESPACE).text.strip()
@@ -111,6 +127,8 @@ def parse_sources(doc):
         fdoc = load(f.text.strip())
         check_valid(f.text.strip(), fdoc)
         s = parse_sources(fdoc)
+        if 'root' in f.attrib:
+            for i in s: i['root'] = get_boolean(f.attrib['root'], False)
         sources += s
     return sources
 
@@ -148,7 +166,7 @@ def parse_dbs(db_iter):
         dbs.append(db)
     return dbs
 
-def backup(options, sources, snapshot, root):
+def backup(options, sources, snapshot, root_snapshot):
     print('--------------------------------------------------------------------------------')
     hostname = socket.gethostname()
 
@@ -163,10 +181,10 @@ def backup(options, sources, snapshot, root):
                                             for exclude in source['exclude']))
             exclude = ' '.join('--exclude="%s"' % exclude \
                                             for exclude in source['exclude'])
-        current_rsync_options = source['rsync_options'] \
-                    if 'rsync_options' in source else options['rsync_options']
+        current_rsync = source['rsync'] if 'rsync' in source else options['rsync']
         current_target = source['target'] \
                                 if 'target' in source else options['target']
+        rsync_root = source['root'] if 'root' in source else options['rsync_root']
 
         match = re.match(r'^([^/]+@)?[^/]+:', source['source'])
         if match:
@@ -183,7 +201,9 @@ def backup(options, sources, snapshot, root):
         if not os.path.exists(current_target):
             os.makedirs(current_target)
 
-        rsync = 'rsync %s %s %s %s' % (exclude, current_rsync_options,
+        rsync = '%srsync %s %s %s %s' % ('sudo ' if rsync_root else '',
+                                        exclude,
+                                        current_rsync,
                                         '%s/' % source['source'] \
                                         if os.path.isdir(source['source']) \
                                         else source['source'], current_target)
@@ -197,22 +217,19 @@ def backup(options, sources, snapshot, root):
             os.system(source['post_script'])
         print('--------------------------------------------------------------------------------')
 
-    if 'git' in options and options['git']:
+    if options['git']:
         timestamp = time.strftime('%Y-%m-%dT%H:%M:%S%z', time.localtime())
         for base_dir in base_dirs:
             print('commit changes in "%s"' % base_dir)
             os.chdir('%s/Files' % base_dir)
             if not os.system('git rev-parse') == 0:
                 os.system('git init')
-            os.system('%sgit add -A' % ('sudo ' \
-                        if root or ('git_root' in options \
-                            and options['git_root']) else ''))
+            os.system('%sgit add -A' % ('sudo ' if options['git_root'] else ''))
             os.system("%sgit commit -m 'backup from %s.'" % ('sudo ' \
-                        if root or ('git_root' in options \
-                            and options['git_root']) else '', timestamp))
+                            if options['git_root'] else '', timestamp))
             print('--------------------------------------------------------------------------------')
 
-    if snapshot:
+    if snapshot or root_snapshot:
         t = time.localtime()
         timestamp = time.strftime('%Y%m%dT%H%M%S%z', t)
         for base_dir in base_dirs:
@@ -222,14 +239,14 @@ def backup(options, sources, snapshot, root):
             if not os.path.exists('%s/Snapshots' % base_dir):
                 os.makedirs('%s/Snapshots' % base_dir)
             os.chdir('%s/Files' % base_dir)
-            if 'git' in options and options['git']:
+            if options['git']:
                 os.system("%sgit tag -a v%s -m '%s'" % ('sudo ' \
-                            if root or ('git_root' in options \
-                                and options['git_root']) \
-                            else '', timestamp,
+                            if options['git_root'] else '', timestamp,
                     time.strftime('snapshot from %d. %B %Y %H:%M:%S%z.', t)))
-            os.system("%s tar -czf ../Snapshots/%s.tar.gz * .??*" % ('sudo' \
-                                                if root else '', timestamp))
+            print("%star -czf ../Snapshots/%s.tar.gz * .??*" % ('sudo ' \
+                                        if root_snapshot else '', timestamp))
+            os.system("%star -czf ../Snapshots/%s.tar.gz * .??*" % ('sudo ' \
+                                        if root_snapshot else '', timestamp))
             print('--------------------------------------------------------------------------------')
 
 def run_script(script):
@@ -301,7 +318,7 @@ def run():
     parser.add_option('-t', '--target', action='store', type='string',
                 dest='target')
     parser.add_option('-x', '--xml', action='store', type='string', dest='xml')
-    parser.add_option('-v', '--is_valid', action='store_true',
+    parser.add_option('-v', '--is-valid', action='store_true',
                 dest='check_valid', help='checks the given xml file on valid')
     parser.add_option('-d', '--no-database', action='store_true',
                 dest='database', help='disables database dump')
@@ -311,8 +328,8 @@ def run():
                 dest='mysql', help='disables MySQL dump')
     parser.add_option('-s', '--snapshot', action='store_true',
                 dest='snapshot', help='make snapshot')
-    parser.add_option('-r', '--root', action='store_true', dest='root',
-                help='make snapshot and git add as root')
+    parser.add_option('-r', '--root-snapshot', action='store_true',
+                dest='root_snapshot', help='make snapshot')
     (cmd_options, cmd_args) = parser.parse_args()
 
     if cmd_options.xml != None:
@@ -328,7 +345,8 @@ def run():
 
     for k, v in sorted(pipeline.items()):
         if v == 'backup':
-            backup(options, sources, cmd_options.snapshot, cmd_options.root)
+            backup(options, sources, cmd_options.snapshot,
+                    cmd_options.root_snapshot)
         elif v == 'db_dump' and not cmd_options.database:
             if not cmd_options.mysql:
                 mysql_dump(options, mysqls)
