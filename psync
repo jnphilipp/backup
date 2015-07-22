@@ -49,8 +49,7 @@ def load(path):
     return etree.parse(path)
 
 def check_valid(path, doc):
-    xmlschema = etree.XMLSchema(etree.parse('psync.xsd'))
-    # xmlschema = etree.XMLSchema(etree.parse('/usr/share/psync/psync.xsd'))
+    xmlschema = etree.XMLSchema(etree.parse('/usr/share/psync/psync.xsd'))
     if not xmlschema.validate(doc):
         print('xml file "%s" not valid. aborting...' % path)
         xmlschema.assertValid(doc)
