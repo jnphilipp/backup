@@ -224,6 +224,13 @@ def backup(options, sources, snapshot, root_snapshot):
             if not os.system('git rev-parse') == 0:
                 os.system('git init')
 
+            if os.path.exists('.gitmodules'):
+                with open('.gitmodules', 'r') as f:
+                    for line in f:
+                        if line.startswith('    path = '):
+                            os.system('git rm --cached "%s"' % line[11:].strip())
+                f.close()
+
             proc = subprocess.Popen('find * -name .git -type d -prune | xargs -I{} dirname {}', stdout=subprocess.PIPE, shell=True)
             (out, err) = proc.communicate()
             with open('.gitmodules', 'w') as f:
