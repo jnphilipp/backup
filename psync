@@ -331,6 +331,7 @@ def run():
                 dest='root_snapshot', help='make snapshot')
     (cmd_options, cmd_args) = parser.parse_args()
 
+    pipeline = {}
     if cmd_options.xml != None:
         if cmd_options.check_valid:
             check_valid(cmd_options.xml, load(cmd_options.xml))
