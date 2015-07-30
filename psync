@@ -221,14 +221,14 @@ def backup(options, sources, snapshot, root_snapshot):
         for base_dir in base_dirs:
             print('commit changes in "%s"' % base_dir)
             os.chdir('%s/Files' % base_dir)
-            if not os.system('git rev-parse') == 0:
-                os.system('git init')
+            if not os.system('%sgit rev-parse' % ('sudo ' if options['git_root'] else '')) == 0:
+                os.system('%sgit init' % ('sudo ' if options['git_root'] else ''))
 
             if os.path.exists('.gitmodules'):
                 with open('.gitmodules', 'r') as f:
                     for line in f:
                         if line.startswith('    path = '):
-                            os.system('git rm --cached "%s"' % line[11:].strip())
+                            os.system('%sgit rm --cached "%s"' % ('sudo ' if options['git_root'] else '', line[11:].strip()))
                 f.close()
 
             proc = subprocess.Popen('find * -name .git -type d -prune | xargs -I{} dirname {}', stdout=subprocess.PIPE, shell=True)
