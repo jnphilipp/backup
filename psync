@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""Python wrapper for rsync to easily configure rsync.
 
-"""
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    any later version.
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import os
@@ -26,6 +26,12 @@ import time
 from gi.repository import Notify
 from lxml import etree
 from optparse import OptionParser
+
+
+__author__ = 'jnphilipp'
+__license__ = 'GPLv3'
+__version__ = '0.9.0'
+
 
 NAMESPACE = {'p':'http://jnphilipp.org/psync/'}
 BOOLEAN_STATES = {'1':True, 'yes':True, 'true':True, 'on':True,
@@ -337,7 +343,7 @@ def run():
                 dest='check_valid', help='checks the given xml file on valid')
     parser.add_option('-d', '--no-database', action='store_true',
                 dest='database', help='disables database dump')
-    parser.add_option('-n', '--no-postgres', action='store_true',
+    parser.add_option('-p', '--no-postgres', action='store_true',
                 dest='postgres', help='disables PostgreSQL dump')
     parser.add_option('-m', '--no-mysql', action='store_true',
                 dest='mysql', help='disables MySQL dump')
