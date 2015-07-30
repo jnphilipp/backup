@@ -237,7 +237,7 @@ def backup(options, sources, snapshot, root_snapshot):
                             os.system('%sgit rm --cached "%s"' % ('sudo ' if options['git_root'] else '', line[11:].strip()))
                 f.close()
 
-            proc = subprocess.Popen('find * -name .git -type d -prune | xargs -I{} dirname {}', stdout=subprocess.PIPE, shell=True)
+            proc = subprocess.Popen('%sfind * -name .git -type d -prune | xargs -I{} dirname {}' % ('sudo ' if options['git_root'] else ''), stdout=subprocess.PIPE, shell=True)
             (out, err) = proc.communicate()
             with open('.gitmodules', 'w') as f:
                 for submodule in out.decode('utf-8').strip().split('\n'):
