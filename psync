@@ -25,10 +25,12 @@ import time
 
 from gi.repository import Notify
 from lxml import etree
+from math import ceil, floor
 from optparse import OptionParser
 
 
 __author__ = 'jnphilipp'
+__email__ = 'me@jnphilipp.org'
 __license__ = 'GPLv3'
 __version__ = '0.9.0'
 
@@ -351,6 +353,8 @@ def run():
                 dest='snapshot', help='make snapshot')
     parser.add_option('-r', '--root-snapshot', action='store_true',
                 dest='root_snapshot', help='make snapshot')
+    parser.add_option('--version', action='store_true', dest='version',
+                help='show version information')
     (cmd_options, cmd_args) = parser.parse_args()
 
     pipeline = {}
@@ -362,6 +366,19 @@ def run():
         else:
             options, sources, mysqls, pgsqls, pipeline = \
                     parse(cmd_options.xml, cmd_options.target)
+    elif cmd_options.version:
+        github = 'https://github.com/jnphilipp/psync'
+        print('#                  psync                  #')
+        print('#           python rsync wrapper          #')
+        print('#                                         #')
+        print('#%s%s%s#' % (' ' * floor((40 - len(__version__)) / 2), 'v%s' % __version__, ' ' * ceil((40 - len(__version__)) / 2)))
+        print('#%s%s%s#' % (' ' * floor((41 - len(__license__)) / 2), __license__, ' ' * ceil((41 - len(__license__)) / 2)))
+        print('#                                         #')
+        print('#%s%s%s#' % (' ' * floor((41 - len(__author__)) / 2), __author__, ' ' * ceil((41 - len(__author__)) / 2)))
+        print('#%s%s%s#' % (' ' * floor((41 - len(__email__)) / 2), __email__, ' ' * ceil((41 - len(__email__)) / 2)))
+        print('#                                         #')
+        print('#%s%s%s#' % (' ' * floor((41 - len(github)) / 2), github, ' ' * ceil((41 - len(github)) / 2)))
+        print('###########################################')
     else:
         parser.print_help()
 
