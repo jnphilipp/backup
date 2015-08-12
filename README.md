@@ -16,3 +16,6 @@ Python wrapper for rsync to easily configure rsync.
 ```
 $ sudo ./install.sh
 ```
+
+###Usage
+For options see `$ psync -h`. An exapmle xml configuration is in `test.xml`.

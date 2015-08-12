@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <psync xmlns="http://jnphilipp.org/psync/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jnphilipp.org/psync/ http://jnphilipp.org/psync/psync.xsd">
     <options>
-        <option name="rsync_options">--delete -auPz</option>
-        <option name="git" root="yes">no</option>
+        <git root="yes">yes</git>
+        <rsync>--delete-after --delete-excluded -aucPz</rsync>
     </options>
     <sources>
+        <file root="yes">/home/jnphilipp/.psync/root.xml</file>
         <source>
             <path>/home</path>
             <exclude>.cache</exclude>
