@@ -32,7 +32,7 @@ from optparse import OptionParser
 __author__ = 'jnphilipp'
 __email__ = 'me@jnphilipp.org'
 __license__ = 'GPLv3'
-__version__ = '0.9.0'
+__version__ = '0.1.0'
 
 
 NAMESPACE = {'p':'http://jnphilipp.org/psync/'}
