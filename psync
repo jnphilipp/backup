@@ -241,11 +241,15 @@ def backup(options, sources, snapshot, root_snapshot):
 
             proc = subprocess.Popen('%sfind * -name .git -type d -prune | xargs -I{} dirname {}' % ('sudo ' if options['git_root'] else ''), stdout=subprocess.PIPE, shell=True)
             (out, err) = proc.communicate()
-            with open('.gitmodules', 'w') as f:
-                for submodule in out.decode('utf-8').strip().split('\n'):
-                    f.write('[submodule "%s"]\n' % os.path.basename(submodule))
-                    f.write('    path = %s\n' % submodule)
-            f.close()
+            if out:
+                with open('.gitmodules', 'w') as f:
+                    for submodule in out.decode('utf-8').strip().split('\n'):
+                        f.write('[submodule "%s"]\n' % os.path.basename(submodule))
+                        f.write('    path = %s\n' % submodule)
+                f.close()
+            else:
+                if os.path.exists('.gitmodules'):
+                    os.remove('.gitmodules')
 
             os.system('%sgit add -A' % ('sudo ' if options['git_root'] else ''))
             os.system("%sgit commit -m 'backup from %s.'" % ('sudo ' \
