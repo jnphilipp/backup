@@ -34,7 +34,7 @@ from subprocess import Popen, PIPE, call
 __author__ = 'jnphilipp'
 __email__ = 'me@jnphilipp.org'
 __license__ = 'GPLv3'
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 
 
 NAMESPACE = {'p':'http://jnphilipp.org/psync/'}
