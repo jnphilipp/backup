@@ -28,7 +28,7 @@ from math import ceil, floor
 from optparse import OptionParser
 from os import makedirs
 from os.path import exists, join
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, call
 
 
 __author__ = 'jnphilipp'
@@ -235,20 +235,11 @@ def backup(options, sources, snapshot, root_snapshot):
                 os.system('%sgit init' % ('sudo ' if options['git_root'] else ''))
 
             if exists('.gitmodules'):
-                with open('.gitmodules', 'r') as f:
-                    for line in f:
-                        if line.startswith('    path = '):
-                            os.system('%sgit rm --cached "%s"' % ('sudo ' if options['git_root'] else '', line[11:].strip()))
-                f.close()
+                _delete_gitmodules(options['git_root'])
 
-            process = Popen('%sfind * -name .git -type d -prune | xargs -I{} dirname {}' % ('sudo ' if options['git_root'] else ''), stdout=PIPE, shell=True)
-            (out, err) = process.communicate()
-            if out:
-                with open('.gitmodules', 'w') as f:
-                    for submodule in out.decode('utf-8').strip().split('\n'):
-                        f.write('[submodule "%s"]\n' % os.path.basename(submodule))
-                        f.write('    path = %s\n' % submodule)
-                f.close()
+            gits = _find_gits(options['git_root'])
+            if gits:
+                _write_gitmodules(gits)
             else:
                 if exists('.gitmodules'):
                     os.remove('.gitmodules')
@@ -282,16 +273,8 @@ def run_script(script):
     print('-' * 100)
     send_notification('Start script "%s".' % script)
     print('starting script "%s".' % script)
-    os.system(script)
+    call(script, shell=True)
     print('-' * 100)
-
-def _pass(path):
-    if path:
-        process = Popen('pass %s' % path, stdout=PIPE, shell=True)
-        (out, err) = process.communicate()
-        return out.decode('utf-8').split('\n')[0]
-    else:
-        return ''
 
 def postgres_dump(options, pgsqls):
     print('-' * 100)
@@ -340,6 +323,35 @@ def mysql_dump(options, mysqls):
                         else '', db['name'], join(current_target,
                             '%s_%s.sql.gz' % (db['name'], timestamp))))
     print('-' * 100)
+
+def _delete_gitmodules(root=False):
+    print('-' * 100)
+    print('eleting gitmodules')
+    with open('.gitmodules', 'r') as f:
+        for line in f:
+            if line.startswith('    path = '):
+                call('%sgit rm -r --cached "%s"' % \
+                    ('sudo ' if root else '', line[11:].strip()), shell=True)
+    print('-' * 100)
+
+def _write_gitmodules(submodules):
+    print('writing gitmodules')
+    with open('.gitmodules', 'w') as f:
+        for submodule in submodules.split('\n'):
+            f.write('[submodule "%s"]\n' % os.path.basename(submodule))
+            f.write('    path = %s\n' % submodule)
+
+def _find_gits(root=False):
+    p = Popen('%sfind * -name .git -type d -prune | xargs -I{} dirname {}' % \
+                ('sudo ' if root else ''), stdout=PIPE, shell=True)
+    return p.communicate()[0].decode('utf-8').strip()
+
+def _pass(path):
+    if path:
+        p = Popen('pass %s' % path, stdout=PIPE, shell=True)
+        return p.communicate()[0].decode('utf-8').split('\n')[0]
+    else:
+        return ''
 
 def run():
     usage = 'usage: %prog [options]'
