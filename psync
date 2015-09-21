@@ -19,7 +19,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os
 import re
 import socket
-import subprocess
 import sys
 import time
 
@@ -27,6 +26,9 @@ from gi.repository import Notify
 from lxml import etree
 from math import ceil, floor
 from optparse import OptionParser
+from os import makedirs
+from os.path import exists, join
+from subprocess import Popen, PIPE
 
 
 __author__ = 'jnphilipp'
@@ -51,7 +53,7 @@ def send_notification(message):
         print(message)
 
 def load(path):
-    if not os.path.exists(path):
+    if not exists(path):
         print('xml file "%s" not found. aborting...' % path)
         sys.exit(1)
     return etree.parse(path)
@@ -205,8 +207,8 @@ def backup(options, sources, snapshot, root_snapshot):
                                         if os.path.isdir(source['source']) \
                                         else os.path.dirname(source['source']))
 
-        if not os.path.exists(current_target):
-            os.makedirs(current_target)
+        if not exists(current_target):
+            makedirs(current_target)
 
         rsync = '%srsync %s %s %s %s' % ('sudo ' if rsync_root else '',
                                         exclude,
@@ -232,15 +234,15 @@ def backup(options, sources, snapshot, root_snapshot):
             if not os.system('%sgit rev-parse' % ('sudo ' if options['git_root'] else '')) == 0:
                 os.system('%sgit init' % ('sudo ' if options['git_root'] else ''))
 
-            if os.path.exists('.gitmodules'):
+            if exists('.gitmodules'):
                 with open('.gitmodules', 'r') as f:
                     for line in f:
                         if line.startswith('    path = '):
                             os.system('%sgit rm --cached "%s"' % ('sudo ' if options['git_root'] else '', line[11:].strip()))
                 f.close()
 
-            proc = subprocess.Popen('%sfind * -name .git -type d -prune | xargs -I{} dirname {}' % ('sudo ' if options['git_root'] else ''), stdout=subprocess.PIPE, shell=True)
-            (out, err) = proc.communicate()
+            process = Popen('%sfind * -name .git -type d -prune | xargs -I{} dirname {}' % ('sudo ' if options['git_root'] else ''), stdout=PIPE, shell=True)
+            (out, err) = process.communicate()
             if out:
                 with open('.gitmodules', 'w') as f:
                     for submodule in out.decode('utf-8').strip().split('\n'):
@@ -248,7 +250,7 @@ def backup(options, sources, snapshot, root_snapshot):
                         f.write('    path = %s\n' % submodule)
                 f.close()
             else:
-                if os.path.exists('.gitmodules'):
+                if exists('.gitmodules'):
                     os.remove('.gitmodules')
 
             os.system('%sgit add -A' % ('sudo ' if options['git_root'] else ''))
@@ -263,8 +265,8 @@ def backup(options, sources, snapshot, root_snapshot):
             send_notification('taking snapshot of "%s".' % base_dir)
             print('taking snapshot of: "%s"' % base_dir)
 
-            if not os.path.exists('%s/Snapshots' % base_dir):
-                os.makedirs('%s/Snapshots' % base_dir)
+            if not exists('%s/Snapshots' % base_dir):
+                makedirs('%s/Snapshots' % base_dir)
             os.chdir('%s/Files' % base_dir)
             if options['git']:
                 os.system("%sgit tag -a v%s -m '%s'" % ('sudo ' \
@@ -285,8 +287,8 @@ def run_script(script):
 
 def _pass(path):
     if path:
-        proc = subprocess.Popen('pass %s' % path, stdout=subprocess.PIPE, shell=True)
-        (out, err) = proc.communicate()
+        process = Popen('pass %s' % path, stdout=PIPE, shell=True)
+        (out, err) = process.communicate()
         return out.decode('utf-8').split('\n')[0]
     else:
         return ''
@@ -304,14 +306,14 @@ def postgres_dump(options, pgsqls):
                             db['ssh'] if 'ssh' in db else socket.gethostname(),
                             db['name'])
 
-        if not os.path.exists(current_target):
-            os.makedirs(current_target)
+        if not exists(current_target):
+            makedirs(current_target)
 
         password = _pass(db['pass']) if 'pass' in db else db['password']
         os.system('%sPGPASSWORD=%s pg_dump --username=%s %s %s | gzip -c > %s' \
             % ('ssh %s ' % db['ssh'] if 'ssh' in db else '', password,
                 db['user'], db['options'] if 'options' in db else '',
-                db['name'], os.path.join(current_target,
+                db['name'], join(current_target,
                             '%s_%s.sql.gz' % (db['name'], timestamp))))
     print('-' * 100)
 
@@ -328,14 +330,14 @@ def mysql_dump(options, mysqls):
                                 db['ssh'] if 'ssh' in db \
                                     else socket.gethostname(), db['name'])
 
-        if not os.path.exists(current_target):
-            os.makedirs(current_target)
+        if not exists(current_target):
+            makedirs(current_target)
 
         password = _pass(db['pass']) if 'pass' in db else db['password']
         os.system('%smysqldump --user=%s --password=%s %s %s | gzip -c > %s' % \
                     ('ssh %s ' % db['ssh'] if 'ssh' in db else '',
                         db['user'], password, db['options'] if 'options' in db \
-                        else '', db['name'], os.path.join(current_target,
+                        else '', db['name'], join(current_target,
                             '%s_%s.sql.gz' % (db['name'], timestamp))))
     print('-' * 100)
 
