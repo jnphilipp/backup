@@ -174,7 +174,7 @@ def parse_dbs(db_iter):
     return dbs
 
 def backup(options, sources, snapshot, root_snapshot):
-    print('--------------------------------------------------------------------------------')
+    print('-' * 100)
     hostname = socket.gethostname()
 
     base_dirs = set()
@@ -218,11 +218,11 @@ def backup(options, sources, snapshot, root_snapshot):
         os.system(rsync)
 
         if 'post_script' in source:
-            print('--------------------------------------------------------------------------------')
+            print('-' * 100)
             send_notification('start post script "%s".' % source['post_script'])
             print('start post script "%s".'  % source['post_script'])
             os.system(source['post_script'])
-        print('--------------------------------------------------------------------------------')
+        print('-' * 100)
 
     if options['git']:
         timestamp = time.strftime('%Y-%m-%dT%H:%M:%S%z', time.localtime())
@@ -254,7 +254,7 @@ def backup(options, sources, snapshot, root_snapshot):
             os.system('%sgit add -A' % ('sudo ' if options['git_root'] else ''))
             os.system("%sgit commit -m 'backup from %s.'" % ('sudo ' \
                             if options['git_root'] else '', timestamp))
-            print('--------------------------------------------------------------------------------')
+            print('-' * 100)
 
     if snapshot or root_snapshot:
         t = time.localtime()
@@ -274,14 +274,14 @@ def backup(options, sources, snapshot, root_snapshot):
                                         if root_snapshot else '', timestamp))
             os.system("%star -czf ../Snapshots/%s.tar.gz * .??*" % ('sudo ' \
                                         if root_snapshot else '', timestamp))
-            print('--------------------------------------------------------------------------------')
+            print('-' * 100)
 
 def run_script(script):
-    print('--------------------------------------------------------------------------------')
+    print('-' * 100)
     send_notification('Start script "%s".' % script)
     print('starting script "%s".' % script)
     os.system(script)
-    print('--------------------------------------------------------------------------------')
+    print('-' * 100)
 
 def _pass(path):
     if path:
@@ -292,7 +292,7 @@ def _pass(path):
         return ''
 
 def postgres_dump(options, pgsqls):
-    print('--------------------------------------------------------------------------------')
+    print('-' * 100)
     print('start dumping of PostgreSQL databases.')
     send_notification('start dumping backup of PostgreSQL databases.')
 
@@ -313,10 +313,10 @@ def postgres_dump(options, pgsqls):
                 db['user'], db['options'] if 'options' in db else '',
                 db['name'], os.path.join(current_target,
                             '%s_%s.sql.gz' % (db['name'], timestamp))))
-    print('--------------------------------------------------------------------------------')
+    print('-' * 100)
 
 def mysql_dump(options, mysqls):
-    print('--------------------------------------------------------------------------------')
+    print('-' * 100)
     print('start dumping of MySQL databases.')
     send_notification('start dumping of MySQL databases.')
 
@@ -337,7 +337,7 @@ def mysql_dump(options, mysqls):
                         db['user'], password, db['options'] if 'options' in db \
                         else '', db['name'], os.path.join(current_target,
                             '%s_%s.sql.gz' % (db['name'], timestamp))))
-    print('--------------------------------------------------------------------------------')
+    print('-' * 100)
 
 def run():
     usage = 'usage: %prog [options]'
