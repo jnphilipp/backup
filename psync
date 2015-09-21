@@ -180,6 +180,7 @@ def backup(options, sources, snapshot, root_snapshot):
     hostname = socket.gethostname()
 
     base_dirs = set()
+    timestamp = time.strftime('%Y%m%dT%H%M%S%z', time.localtime())
     for source in sources:
         send_notification('starting backup of "%s".' % source['source'])
         print('backup of: %s' % source['source'])
@@ -198,11 +199,13 @@ def backup(options, sources, snapshot, root_snapshot):
         match = re.match(r'^([^/]+@)?[^/]+:', source['source'])
         if match:
             print('is remote: %s' % source['source'])
-            base_dirs.add('%s/%s' % (current_target, match.group(0)[:-1]))
+            base_dir = '%s/%s' % (current_target, match.group(0)[:-1])
+            base_dirs.add(base_dir)
             current_target += '/%s' % re.sub(r'^([^/]+@)?[^/]+:',
                             '%s/Files' % match.group(0)[:-1], source['source'])
         else:
-            base_dirs.add('%s/%s' % (current_target, hostname))
+            base_dir = '%s/%s' % (current_target, hostname)
+            base_dirs.add(base_dir)
             current_target += '/%s/Files%s' % (hostname, source['source'] \
                                         if os.path.isdir(source['source']) \
                                         else os.path.dirname(source['source']))
@@ -217,7 +220,20 @@ def backup(options, sources, snapshot, root_snapshot):
                                         if os.path.isdir(source['source']) \
                                         else source['source'], current_target)
         print(rsync)
-        os.system(rsync)
+        p = Popen(rsync, stdout=PIPE, stderr=PIPE, shell=True)
+
+        out = ''
+        line = ''
+        while p.poll() is None:
+            sys.stdout.write(' ' * len(line.split('\r')[-1]))
+            line = p.stdout.readline().decode('utf-8')
+            out += line.split('\r')[-1]
+            sys.stdout.write('\r%s\r' % line.strip())
+            sys.stdout.flush()
+        err = ('\n%s' % p.communicate()[1].decode('utf-8')).strip()
+        print('-' * 100)
+        print('rsync errors%s'  % err)
+        _write_logfile(base_dir, timestamp, rsync, out, err)
 
         if 'post_script' in source:
             print('-' * 100)
@@ -352,6 +368,20 @@ def _pass(path):
         return p.communicate()[0].decode('utf-8').split('\n')[0]
     else:
         return ''
+
+def _write_logfile(base_dir, timestamp, rsync, out, err):
+    log_dir = join(base_dir, 'Files', 'psync.logs')
+    if not exists(log_dir):
+        makedirs(log_dir)
+
+    with open(join(log_dir, '%s.log' % timestamp), 'a', encoding='utf-8') as f:
+        f.write('%s\n' % ('-' * 100))
+        f.write('%s\n' % rsync)
+        f.write('%s\n' % ('-' * 100))
+        f.write('%s\n' % out)
+        f.write('%s\n' % ('-' * 100))
+        f.write('%s\n' % err)
+        f.write('%s\n' % ('-' * 100))
 
 def run():
     usage = 'usage: %prog [options]'
