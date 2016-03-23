@@ -342,13 +342,12 @@ def mysql_dump(options, mysqls):
 
 def _delete_gitmodules(root=False):
     print('-' * 100)
-    print('eleting gitmodules')
+    print('deleting gitmodules')
     with open('.gitmodules', 'r') as f:
         for line in f:
             if line.startswith('    path = '):
                 call('%sgit rm -r --cached "%s"' % \
                     ('sudo ' if root else '', line[11:].strip()), shell=True)
-    print('-' * 100)
 
 def _write_gitmodules(submodules):
     print('writing gitmodules')
@@ -356,6 +355,7 @@ def _write_gitmodules(submodules):
         for submodule in submodules.split('\n'):
             f.write('[submodule "%s"]\n' % os.path.basename(submodule))
             f.write('    path = %s\n' % submodule)
+    print('-' * 100)
 
 def _find_gits(root=False):
     p = Popen('%sfind * -name .git -type d -prune | xargs -I{} dirname {}' % \
