@@ -215,6 +215,7 @@ def backup(options, sources, snapshot, root_snapshot):
 
         if not exists(current_target):
             makedirs(current_target)
+        current_target = '"%s"' % current_target
 
         rsync = '%srsync %s %s %s %s' % ('sudo ' if rsync_root else '',
                                         exclude,
@@ -226,16 +227,15 @@ def backup(options, sources, snapshot, root_snapshot):
         p = Popen(rsync, stdout=PIPE, stderr=PIPE, shell=True)
 
         out = ''
-        line = ''
         while p.poll() is None:
-            sys.stdout.write(' ' * len(line.split('\r')[-1]))
             line = p.stdout.readline().decode('utf-8')
             out += line.split('\r')[-1]
-            sys.stdout.write('\r%s\r' % line.strip())
+            sys.stdout.write(line)
             sys.stdout.flush()
         err = ('\n%s' % p.communicate()[1].decode('utf-8')).strip()
+        print()
         print('-' * 100)
-        print('rsync errors%s'  % err)
+        print('rsync errors\n%s'  % err)
         _write_logfile(base_dir, timestamp, rsync, out, err)
 
         if 'post_script' in source:
@@ -310,9 +310,10 @@ def postgres_dump(options, pgsqls):
 
         if not exists(current_target):
             makedirs(current_target)
+        current_target = '"%s"' % current_target
 
         password = _pass(db['pass']) if 'pass' in db else db['password']
-        os.system('%sPGPASSWORD=%s pg_dump --username=%s %s %s | gzip -c > %s' \
+        os.system('%sPGPASSWORD="%s" pg_dump --username=%s %s %s | gzip -c > %s' \
             % ('ssh %s ' % db['ssh'] if 'ssh' in db else '', password,
                 db['user'], db['options'] if 'options' in db else '',
                 db['name'], join(current_target,
@@ -334,6 +335,7 @@ def mysql_dump(options, mysqls):
 
         if not exists(current_target):
             makedirs(current_target)
+        current_target = '"%s"' % current_target
 
         password = _pass(db['pass']) if 'pass' in db else db['password']
         os.system('%smysqldump --user=%s --password=%s %s %s | gzip -c > %s' % \
@@ -361,7 +363,7 @@ def _write_gitmodules(submodules):
     print('-' * 100)
 
 def _find_gits(root=False):
-    p = Popen('%sfind * -name .git -type d -prune | xargs -I{} dirname {}' % \
+    p = Popen('%sfind . -type d \( -exec /usr/bin/test -d "{}/.git" -a "{}" != "." \; -print -prune -o -name .git -prune \)' % \
                 ('sudo ' if root else ''), stdout=PIPE, shell=True)
     return p.communicate()[0].decode('utf-8').strip()
 
@@ -419,6 +421,7 @@ def run():
                     parse(cmd_options.xml, cmd_options.target)
     elif cmd_options.version:
         github = 'https://github.com/jnphilipp/psync'
+        print('###########################################')
         print('#                  psync                  #')
         print('#           python rsync wrapper          #')
         print('#                                         #')
