@@ -14,7 +14,7 @@ Python wrapper for rsync to easily configure rsync.
 ##Install
 
 ```
-$ sudo ./install.sh
+$ sudo make install
 ```
 
 ###Usage
