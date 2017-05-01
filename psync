@@ -364,9 +364,10 @@ def _write_gitmodules(submodules):
     print('-' * 100)
 
 def _find_gits(root=False):
-    p = Popen('%sfind . -type d \( -exec /usr/bin/test -d "{}/.git" -a ' +
-              '"{}" != "." \; -print -prune -o -name .git -prune \)' % \
-              ('sudo ' if root else ''), stdout=PIPE, shell=True)
+    p = Popen(('sudo ' if root else '') +
+              'find . -type d \( -exec /usr/bin/test -d "{}/.git" -a ' +
+              '"{}" != "." \; -print -prune -o -name .git -prune \)',
+              stdout=PIPE, shell=True)
     return p.communicate()[0].decode('utf-8').strip()
 
 def _pass(path):
