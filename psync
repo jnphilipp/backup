@@ -44,8 +44,10 @@ NAMESPACE = {'p':'http://jnphilipp.org/psync/'}
 BOOLEAN_STATES = {'1':True, 'yes':True, 'true':True, 'on':True,
                     '0':False, 'no':False, 'false':False, 'off':False}
 
+
 def get_boolean(string, default=False):
     return BOOLEAN_STATES[string] if string in BOOLEAN_STATES else default
+
 
 def send_notification(message):
     """send messages to notify-osd"""
@@ -55,11 +57,13 @@ def send_notification(message):
     except:
         print(message)
 
+
 def load(path):
     if not exists(path):
         print('xml file "%s" not found. aborting...' % path)
         sys.exit(1)
     return etree.parse(path)
+
 
 def check_valid(path, doc):
     xmlschema = etree.XMLSchema(etree.parse('/usr/share/psync/psync.xsd'))
@@ -67,6 +71,7 @@ def check_valid(path, doc):
         print('xml file "%s" not valid. aborting...' % path)
         xmlschema.assertValid(doc)
         sys.exit(1)
+
 
 def parse(path, target=None):
     doc = load(path)
@@ -85,15 +90,15 @@ def parse(path, target=None):
             options['rsync_root'] = get_boolean(o.attrib['root'].strip(), False)
     if doc.find('p:options/p:target', namespaces=NAMESPACE) is not None:
         options['target'] = doc.find('p:options/p:target',
-                                        namespaces=NAMESPACE).text.strip()
+                                     namespaces=NAMESPACE).text.strip()
     if doc.find('p:options/p:pre_backup_script',
                 namespaces=NAMESPACE) is not None:
         options['pre_backup_script'] = doc.find('p:options/p:pre_backup_script',
-                                            namespaces=NAMESPACE).text.strip()
+                                                namespaces=NAMESPACE).text.strip()
     if doc.find('p:options/p:post_backup_script',
                 namespaces=NAMESPACE) is not None:
         options['post_backup_script'] = doc.find('p:options/p:post_backup_script',
-                                            namespaces=NAMESPACE).text.strip()
+                                                 namespaces=NAMESPACE).text.strip()
 
     if target:
         options['target'] = target
@@ -107,13 +112,11 @@ def parse(path, target=None):
           sys.exit(1)
 
     sources = parse_sources(doc)
-    pgsqls = parse_dbs(doc.xpath('p:databases/p:postgresql/*',
-                                namespaces=NAMESPACE))
-    mysqls = parse_dbs(doc.xpath('p:databases/p:mysql/*',
-                                namespaces=NAMESPACE))
-    parse_db_files(doc.xpath('p:databases/p:file',
-                            namespaces=NAMESPACE), mysqls, pgsqls)
+    pgsqls = parse_dbs(doc.xpath('p:databases/p:postgresql/*', namespaces=NAMESPACE))
+    mysqls = parse_dbs(doc.xpath('p:databases/p:mysql/*', namespaces=NAMESPACE))
+    parse_db_files(doc.xpath('p:databases/p:file', namespaces=NAMESPACE), mysqls, pgsqls)
     return (options, sources, mysqls, pgsqls, pipeline)
+
 
 def parse_sources(doc):
     sources = []
@@ -121,10 +124,9 @@ def parse_sources(doc):
         source = {'source': s.find('p:path', namespaces=NAMESPACE).text.strip()}
         if s.find('p:exclude', namespaces=NAMESPACE) is not None:
             source['exclude'] = [e.text.strip() for e in s.iterfind('p:exclude',
-                                    namespaces=NAMESPACE)]
+                                                                    namespaces=NAMESPACE)]
         if s.find('p:target', namespaces=NAMESPACE) is not None:
-            source['target'] = s.find('p:target',
-                                        namespaces=NAMESPACE).text.strip()
+            source['target'] = s.find('p:target', namespaces=NAMESPACE).text.strip()
         if s.find('p:rsync', namespaces=NAMESPACE) is not None:
             o = s.find('p:rsync', namespaces=NAMESPACE)
             source['rsync'] = o.text.strip()
@@ -132,7 +134,7 @@ def parse_sources(doc):
                 source['root'] = get_boolean(o.attrib['root'].strip(), False)
         if s.find('p:post_script', namespaces=NAMESPACE) is not None:
             source['post_script'] = s.find('p:post_script',
-                                            namespaces=NAMESPACE).text.strip()
+                                           namespaces=NAMESPACE).text.strip()
         sources.append(source)
 
     for f in doc.xpath('p:sources/p:file', namespaces=NAMESPACE):
@@ -151,11 +153,11 @@ def parse_db_files(file_iter, mysqls, pgsqls):
         doc = load(path)
         check_valid(path, doc)
         pgsqls += (parse_dbs(doc.xpath('p:databases/p:postgresql/*',
-                                namespaces=NAMESPACE)))
-        mysqls += (parse_dbs(doc.xpath('p:databases/p:mysql/*',
-                                namespaces=NAMESPACE)))
+                                       namespaces=NAMESPACE)))
+        mysqls += (parse_dbs(doc.xpath('p:databases/p:mysql/*', namespaces=NAMESPACE)))
         parse_db_files(doc.xpath('p:databases/p:file',
-                                namespaces=NAMESPACE), mysqls, pgsqls)
+                                 namespaces=NAMESPACE), mysqls, pgsqls)
+
 
 def parse_dbs(db_iter):
     dbs = []
@@ -163,20 +165,18 @@ def parse_dbs(db_iter):
         db = {'name': c.find('p:name', namespaces=NAMESPACE).text.strip(),
                 'user': c.find('p:user', namespaces=NAMESPACE).text.strip()}
         if c.find('p:password', namespaces=NAMESPACE) is not None:
-            db['password'] = c.find('p:password',
-                                        namespaces=NAMESPACE).text.strip()
+            db['password'] = c.find('p:password', namespaces=NAMESPACE).text.strip()
         if c.find('p:pass', namespaces=NAMESPACE) is not None:
             db['pass'] = c.find('p:pass', namespaces=NAMESPACE).text.strip()
         if c.find('p:target', namespaces=NAMESPACE) is not None:
-            db['target'] = c.find('p:target',
-                                    namespaces=NAMESPACE).text.strip()
+            db['target'] = c.find('p:target', namespaces=NAMESPACE).text.strip()
         if c.find('p:options', namespaces=NAMESPACE) is not None:
-            db['options'] = c.find('p:options',
-                                    namespaces=NAMESPACE).text.strip()
+            db['options'] = c.find('p:options', namespaces=NAMESPACE).text.strip()
         if c.find('p:ssh', namespaces=NAMESPACE) is not None:
             db['ssh'] = c.find('p:ssh', namespaces=NAMESPACE).text.strip()
         dbs.append(db)
     return dbs
+
 
 def backup(options, sources, snapshot, root_snapshot):
     print('-' * 100)
@@ -190,13 +190,10 @@ def backup(options, sources, snapshot, root_snapshot):
 
         exclude = ''
         if 'exclude' in source:
-            print('Excluding: %s' % ' '.join('"%s"' % exclude \
-                                            for exclude in source['exclude']))
-            exclude = ' '.join('--exclude="%s"' % exclude \
-                                            for exclude in source['exclude'])
+            print('Excluding: %s' % ' '.join(['"%s"' % e for e in source['exclude']]))
+            exclude = ' '.join('--exclude="%s"' % e for e in source['exclude'])
         current_rsync = source['rsync'] if 'rsync' in source else options['rsync']
-        current_target = source['target'] \
-                                if 'target' in source else options['target']
+        current_target = source['target'] if 'target' in source else options['target']
         rsync_root = source['root'] if 'root' in source else options['rsync_root']
 
         match = re.match(r'^([^/]+@)?[^/]+:', source['source'])
@@ -205,24 +202,27 @@ def backup(options, sources, snapshot, root_snapshot):
             base_dir = '%s/%s' % (current_target, match.group(0)[:-1])
             base_dirs.add(base_dir)
             current_target += '/%s' % re.sub(r'^([^/]+@)?[^/]+:',
-                            '%s/Files' % match.group(0)[:-1], source['source'])
+                                             '%s/Files' % match.group(0)[:-1],
+                                             source['source'])
         else:
             base_dir = '%s/%s' % (current_target, hostname)
             base_dirs.add(base_dir)
-            current_target += '/%s/Files%s' % (hostname, source['source'] \
-                                        if os.path.isdir(source['source']) \
-                                        else os.path.dirname(source['source']))
+            if os.path.isdir(source['source']):
+                s = source['source']
+            else:
+                s = os.path.dirname(source['source'])
+            current_target += '/%s/Files%s' % (hostname, s)
 
         if not exists(current_target):
             makedirs(current_target)
         current_target = '"%s"' % current_target
 
+        if os.path.isdir(source['source']):
+            s = '%s/' % source['source']
+        else:
+            s = source['source']
         rsync = '%srsync %s %s %s %s' % ('sudo ' if rsync_root else '',
-                                        exclude,
-                                        current_rsync,
-                                        '%s/' % source['source'] \
-                                        if os.path.isdir(source['source']) \
-                                        else source['source'], current_target)
+                                         exclude, current_rsync, s, current_target)
         print(rsync)
         p = Popen(rsync, stdout=PIPE, stderr=PIPE, shell=True)
 
@@ -289,6 +289,7 @@ def backup(options, sources, snapshot, root_snapshot):
                                         if root_snapshot else '', timestamp))
             print('-' * 100)
 
+
 def run_script(script):
     print('-' * 100)
     send_notification('Start script "%s".' % script)
@@ -296,10 +297,11 @@ def run_script(script):
     call(script, shell=True)
     print('-' * 100)
 
+
 def postgres_dump(options, pgsqls):
     print('-' * 100)
     print('Start dumping of PostgreSQL databases.')
-    send_notification('Start dumping backup of PostgreSQL databases.')
+    send_notification('Start dumping of PostgreSQL databases.')
 
     timestamp = time.strftime('%Y%m%dT%H%M%S%z', time.localtime())
     for db in pgsqls:
@@ -313,13 +315,20 @@ def postgres_dump(options, pgsqls):
             makedirs(current_target)
         current_target = '"%s"' % current_target
 
-        password = _pass(db['pass']) if 'pass' in db else db['password']
-        os.system('%sPGPASSWORD="%s" pg_dump --username=%s %s %s | gzip -c > %s' \
-            % ('ssh %s ' % db['ssh'] if 'ssh' in db else '', password,
-                db['user'], db['options'] if 'options' in db else '',
-                db['name'], join(current_target,
-                            '%s_%s.sql.gz' % (db['name'], timestamp))))
+        ssh = 'ssh %s ' % db['ssh'] if 'ssh' in db else ''
+        user = '--username=%s' % db['user']
+        if 'pass' in db:
+            password = 'PGPASSWORD="%s"' % _pass(db['pass'])
+        elif 'password' in db:
+            password = 'PGPASSWORD="%s"' % db['password']
+        else:
+            password = ''
+        os.system('%s%s pg_dump %s %s %s | gzip -c > %s' \
+            % (ssh, password, user, db['options'] if 'options' in db else '',
+               db['name'],
+               join(current_target, '%s_%s.sql.gz' % (db['name'], timestamp))))
     print('-' * 100)
+
 
 def mysql_dump(options, mysqls):
     print('-' * 100)
@@ -329,22 +338,33 @@ def mysql_dump(options, mysqls):
     timestamp = time.strftime('%Y%m%dT%H%M%S%z', time.localtime())
     for db in mysqls:
         print('Backup of: "%s"' % db['name'])
-        current_target = db['target'] if 'target' in db \
-                        else '%s/%s/DBDumps/MySQL/%s' % (options['target'],
-                                db['ssh'] if 'ssh' in db \
-                                    else socket.gethostname(), db['name'])
+        if 'target' in db:
+            current_target = db['target']
+        else:
+            hostname = db['ssh'] if 'ssh' in db else socket.gethostname()
+            current_target = '%s/%s/DBDumps/MySQL/%s' % (options['target'],
+                                                         hostname,
+                                                         db['name'])
 
         if not exists(current_target):
             makedirs(current_target)
         current_target = '"%s"' % current_target
 
-        password = _pass(db['pass']) if 'pass' in db else db['password']
-        os.system('%smysqldump --user=%s --password=%s %s %s | gzip -c > %s' % \
-                    ('ssh %s ' % db['ssh'] if 'ssh' in db else '',
-                        db['user'], password, db['options'] if 'options' in db \
-                        else '', db['name'], join(current_target,
-                            '%s_%s.sql.gz' % (db['name'], timestamp))))
+        ssh = 'ssh %s ' % db['ssh'] if 'ssh' in db else ''
+        user = '--user=%s' % db['user']
+        if 'pass' in db:
+            password = '--password=%s' % _pass(db['pass'])
+        elif 'password' in db:
+            password = '--password=%s' % db['password']
+        else:
+            password = ''
+        os.system('%smysqldump %s %s %s %s | gzip -c > %s' % \
+                    (ssh, user, password,
+                     db['options'] if 'options' in db else '',
+                     db['name'],
+                     join(current_target, '%s_%s.sql.gz' % (db['name'], timestamp))))
     print('-' * 100)
+
 
 def _delete_gitmodules(root=False):
     print('-' * 100)
@@ -352,8 +372,9 @@ def _delete_gitmodules(root=False):
     with open('.gitmodules', 'r') as f:
         for line in f:
             if line.startswith('    path = '):
-                call('%sgit rm -r --cached "%s"' % \
-                    ('sudo ' if root else '', line[11:].strip()), shell=True)
+                call('%sgit rm -r --cached "%s"' % ('sudo ' if root else '',
+                                                    line[11:].strip()), shell=True)
+
 
 def _write_gitmodules(submodules):
     print('Writing gitmodules')
@@ -363,6 +384,7 @@ def _write_gitmodules(submodules):
             f.write('    path = %s\n' % submodule)
     print('-' * 100)
 
+
 def _find_gits(root=False):
     p = Popen(('sudo ' if root else '') +
               'find . -type d \( -exec /usr/bin/test -d "{}/.git" -a ' +
@@ -370,12 +392,14 @@ def _find_gits(root=False):
               stdout=PIPE, shell=True)
     return p.communicate()[0].decode('utf-8').strip()
 
+
 def _pass(path):
     if path:
         p = Popen('pass %s' % path, stdout=PIPE, shell=True)
         return p.communicate()[0].decode('utf-8').split('\n')[0]
     else:
         return ''
+
 
 def _write_logfile(base_dir, timestamp, rsync, out, err):
     log_dir = join(base_dir, 'Files', 'psync.logs')
@@ -390,6 +414,7 @@ def _write_logfile(base_dir, timestamp, rsync, out, err):
         f.write('%s\n' % ('-' * 100))
         f.write('%s\n' % err)
         f.write('%s\n' % ('-' * 100))
+
 
 def run():
     usage = 'usage: %prog [options]'
