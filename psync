@@ -180,7 +180,6 @@ def parse_dbs(db_iter):
 
 def backup(options, sources, snapshot, root_snapshot):
     print('-' * 100)
-    hostname = socket.gethostname()
 
     base_dirs = set()
     timestamp = time.strftime('%Y%m%dT%H%M%S%z', time.localtime())
@@ -190,7 +189,6 @@ def backup(options, sources, snapshot, root_snapshot):
 
         exclude = ''
         if 'exclude' in source:
-            print('Excluding: %s' % ' '.join(['"%s"' % e for e in source['exclude']]))
             exclude = ' '.join('--exclude="%s"' % e for e in source['exclude'])
         current_rsync = source['rsync'] if 'rsync' in source else options['rsync']
         current_target = source['target'] if 'target' in source else options['target']
@@ -199,19 +197,19 @@ def backup(options, sources, snapshot, root_snapshot):
         match = re.match(r'^([^/]+@)?[^/]+:', source['source'])
         if match:
             print('Is remote: %s' % source['source'])
-            base_dir = '%s/%s' % (current_target, match.group(0)[:-1])
-            base_dirs.add(base_dir)
-            current_target += '/%s' % re.sub(r'^([^/]+@)?[^/]+:',
-                                             '%s/Files' % match.group(0)[:-1],
-                                             source['source'])
+            hostname = match.group(0)[:-1]
+            target_dir = '/%s' % re.sub(r'^([^/]+@)?[^/]+:',
+                                        '%s/%%s' % hostname, source['source'])
         else:
-            base_dir = '%s/%s' % (current_target, hostname)
-            base_dirs.add(base_dir)
+            hostname = socket.gethostname()
             if os.path.isdir(source['source']):
                 s = source['source']
             else:
                 s = os.path.dirname(source['source'])
-            current_target += '/%s/Files%s' % (hostname, s)
+            target_dir = '/%s/%%s%s' % (hostname, s)
+        base_dir = '%s/%s' % (current_target, hostname)
+        base_dirs.add(base_dir)
+        current_target += target_dir % 'files'
 
         if not exists(current_target):
             makedirs(current_target)
@@ -222,7 +220,8 @@ def backup(options, sources, snapshot, root_snapshot):
         else:
             s = source['source']
         rsync = '%srsync %s %s %s %s' % ('sudo ' if rsync_root else '',
-                                         exclude, current_rsync, s, current_target)
+                                         exclude, current_rsync, s,
+                                         current_target)
         print(rsync)
         p = Popen(rsync, stdout=PIPE, stderr=PIPE, shell=True)
 
@@ -276,17 +275,16 @@ def backup(options, sources, snapshot, root_snapshot):
             send_notification('Taking snapshot of "%s".' % base_dir)
             print('Taking snapshot of: "%s"' % base_dir)
 
-            if not exists('%s/Snapshots' % base_dir):
-                makedirs('%s/Snapshots' % base_dir)
+            if not exists('%s/snapshots' % base_dir):
+                makedirs('%s/snapshots' % base_dir)
             os.chdir('%s/Files' % base_dir)
             if options['git']:
                 os.system("%sgit tag -a v%s -m '%s'" % ('sudo ' \
                             if options['git_root'] else '', timestamp,
                     time.strftime('snapshot from %d. %B %Y %H:%M:%S%z.', t)))
-            print("%star -czf ../Snapshots/%s.tar.gz * .??*" % ('sudo ' \
-                                        if root_snapshot else '', timestamp))
-            os.system("%star -czf ../Snapshots/%s.tar.gz * .??*" % ('sudo ' \
-                                        if root_snapshot else '', timestamp))
+            tar = 'tar -czf ../snapshots/%s.tar.gz * .??*' % timestamp
+            print("%s%s" % ('sudo ' if root_snapshot else '', tar))
+            os.system("%s%s" % ('sudo ' if root_snapshot else '', tar))
             print('-' * 100)
 
 
@@ -306,27 +304,30 @@ def postgres_dump(options, pgsqls):
     timestamp = time.strftime('%Y%m%dT%H%M%S%z', time.localtime())
     for db in pgsqls:
         print('Backup of: "%s"' % db['name'])
-        current_target = db['target'] if 'target' in db \
-                    else '%s/%s/DBDumps/PostgreSQL/%s' % (options['target'],
-                            db['ssh'] if 'ssh' in db else socket.gethostname(),
-                            db['name'])
+        if 'target' in db:
+            current_target = db['target']
+        else:
+            hostname = db['ssh'] if 'ssh' in db else socket.gethostname()
+            current_target = '%s/%s/db-dumps/PostgreSQL/%s' % (options['target'],
+                                                               hostname,
+                                                               db['name'])
 
         if not exists(current_target):
             makedirs(current_target)
         current_target = '"%s"' % current_target
 
-        ssh = 'ssh %s ' % db['ssh'] if 'ssh' in db else ''
-        user = '--username=%s' % db['user']
+        command = 'ssh %s ' % db['ssh'] if 'ssh' in db else ''
         if 'pass' in db:
-            password = 'PGPASSWORD="%s"' % _pass(db['pass'])
+            command += 'PGPASSWORD="%s"' % _pass(db['pass'])
         elif 'password' in db:
-            password = 'PGPASSWORD="%s"' % db['password']
+            command += 'PGPASSWORD="%s"' % db['password']
         else:
-            password = ''
-        os.system('%s%s pg_dump %s %s %s | gzip -c > %s' \
-            % (ssh, password, user, db['options'] if 'options' in db else '',
-               db['name'],
-               join(current_target, '%s_%s.sql.gz' % (db['name'], timestamp))))
+            command += ''
+
+        command += ' pg_dump --username=%s' % db['user']
+        if 'options' in db:
+            command += ' %s' % db['options']
+        path = os.path.join(current_target, '%s_%s.sql.gz' % (db['name'],
     print('-' * 100)
 
 
@@ -342,27 +343,29 @@ def mysql_dump(options, mysqls):
             current_target = db['target']
         else:
             hostname = db['ssh'] if 'ssh' in db else socket.gethostname()
-            current_target = '%s/%s/DBDumps/MySQL/%s' % (options['target'],
-                                                         hostname,
-                                                         db['name'])
+            current_target = '%s/%s/db-dumps/MySQL/%s' % (options['target'],
+                                                          hostname,
+                                                          db['name'])
 
         if not exists(current_target):
             makedirs(current_target)
         current_target = '"%s"' % current_target
 
-        ssh = 'ssh %s ' % db['ssh'] if 'ssh' in db else ''
-        user = '--user=%s' % db['user']
+        command = 'ssh %s ' % db['ssh'] if 'ssh' in db else ''
+        command += 'mysqldump --user=%s' % db['user']
         if 'pass' in db:
-            password = '--password=%s' % _pass(db['pass'])
+            command += '--password=%s' % _pass(db['pass'])
         elif 'password' in db:
-            password = '--password=%s' % db['password']
+            command += '--password=%s' % db['password']
         else:
-            password = ''
-        os.system('%smysqldump %s %s %s %s | gzip -c > %s' % \
-                    (ssh, user, password,
-                     db['options'] if 'options' in db else '',
-                     db['name'],
-                     join(current_target, '%s_%s.sql.gz' % (db['name'], timestamp))))
+            command += ''
+
+        if 'options' in db:
+            command += ' %s' % db['options']
+        path = os.path.join(current_target, '%s_%s.sql.gz' % (db['name'],
+                                                              timestamp))
+        command += ' %s | gzip -c > %s' % (db['name'], path)
+        os.system(command)
     print('-' * 100)
 
 
@@ -402,7 +405,7 @@ def _pass(path):
 
 
 def _write_logfile(base_dir, timestamp, rsync, out, err):
-    log_dir = join(base_dir, 'Files', 'psync.logs')
+    log_dir = join(base_dir, 'log')
     if not exists(log_dir):
         makedirs(log_dir)
 
