@@ -25,12 +25,10 @@ import time
 import gi
 gi.require_version('Notify', '0.7')
 
+from argparse import ArgumentParser, RawTextHelpFormatter, ArgumentTypeError
 from gi.repository import Notify
 from lxml import etree
 from math import ceil, floor
-from optparse import OptionParser
-from os import makedirs
-from os.path import exists, join
 from subprocess import Popen, PIPE, call
 
 
@@ -38,6 +36,26 @@ __author__ = 'jnphilipp'
 __email__ = 'mail@jnphilipp.org'
 __license__ = 'GPLv3'
 __version__ = '0.1.4'
+__github__ = 'https://github.com/jnphilipp/psync'
+__app__ = (('###########################################\n' +
+            '#                  psync                  #\n' +
+            '#           python rsync wrapper          #\n' +
+            '#                                         #\n' +
+            '#%s%s%s#\n' % (' ' * floor((40 - len(__version__)) / 2),
+                            'v%s' % __version__,
+                            ' ' * ceil((40 - len(__version__)) / 2)) +
+            '#%s%s%s#\n' % (' ' * floor((41 - len(__license__)) / 2),
+                            __license__,
+                            ' ' * ceil((41 - len(__license__)) / 2)) +
+            '#                                         #\n' +
+            '#%s%s%s#\n' % (' ' * floor((41 - len(__author__)) / 2), __author__,
+                            ' ' * ceil((41 - len(__author__)) / 2)) +
+            '#%s%s%s#\n' % (' ' * floor((41 - len(__email__)) / 2), __email__,
+                            ' ' * ceil((41 - len(__email__)) / 2)) +
+            '#                                         #\n' +
+            '#%s%s%s#\n' % (' ' * floor((41 - len(__github__)) / 2), __github__,
+                            ' ' * ceil((41 - len(__github__)) / 2)) +
+            '###########################################'))
 
 
 NAMESPACE = {'p': 'http://jnphilipp.org/psync/'}
@@ -67,7 +85,7 @@ def send_notification(message):
 
 
 def load(path):
-    if not exists(path):
+    if not os.path.exists(path):
         print('xml file "%s" not found. aborting...' % path)
         sys.exit(1)
     return etree.parse(path)
@@ -140,7 +158,7 @@ def parse_sources(doc, target):
     pgsqls = []
     for s in doc.xpath('p:sources/p:source', namespaces=NAMESPACE):
         source = {
-            'source': s.find('p:path', namespaces=NAMESPACE).text.strip()
+            'path': s.find('p:path', namespaces=NAMESPACE).text.strip()
         }
         if s.find('p:exclude', namespaces=NAMESPACE) is not None:
             source['exclude'] = []
@@ -213,71 +231,72 @@ def parse_dbs(db_iter):
     return dbs
 
 
-def backup(options, sources, snapshot, root_snapshot):
+def backup(options, sources, snapshot):
     print('-' * 100)
 
-    base_dirs = set()
+    base_dirs = {}
     timestamp = time.strftime('%Y%m%dT%H%M%S%z', time.localtime())
     for source in sources:
-        send_notification('Starting backup of "%s".' % source['source'])
-        print('Backup of: %s' % source['source'])
+        send_notification('Starting backup of "%s".' % source['path'])
+        print('Backup of: %s' % source['path'])
 
         exclude = ''
         if 'exclude' in source:
             exclude = ' '.join('--exclude="%s"' % e for e in source['exclude'])
 
         if 'rsync' in source:
-            current_rsync = source['rsync']
+            rsync_config = source['rsync']
         else:
-            current_rsync = options['rsync']
+            rsync_config = options['rsync']
 
         if 'target' in source:
-            current_target = source['target']
+            target = source['target']
         else:
-            current_target = options['target']
+            target = options['target']
 
         if 'root' in source:
             rsync_root = source['root']
         else:
             rsync_root = options['rsync_root']
 
-        match = re.match(r'^([^/]+@)?[^/]+:', source['source'])
+        match = re.match(r'^([^/]+@)?[^/]+:', source['path'])
         if match:
-            print('Is remote: %s' % source['source'])
+            print('Is remote: %s' % source['path'])
             hostname = match.group(0)[:-1]
             target_dir = '/%s' % re.sub(r'^([^/]+@)?[^/]+:',
-                                        '%s/%%s' % hostname, source['source'])
+                                        '%s/%%s' % hostname, source['path'])
         else:
             hostname = socket.gethostname()
-            if os.path.isdir(source['source']):
-                s = source['source']
+            if os.path.isdir(source['path']):
+                path = source['path']
             else:
-                s = os.path.dirname(source['source'])
-            target_dir = '/%s/%%s%s' % (hostname, s)
-        base_dir = '%s/%s' % (current_target, hostname)
-        base_dirs.add(base_dir)
-        current_backup_dir = '%s%s' % (current_target, target_dir % 'backup')
-        current_target += target_dir % 'files'
+                path = os.path.dirname(source['path'])
+            target_dir = '/%s/%%s%s' % (hostname, path)
+        base_dir = '%s/%s' % (target, hostname)
+        if base_dir not in base_dirs:
+            base_dirs[base_dir] = False
+        base_dirs[base_dir] += rsync_root
+        current_backup_dir = '%s%s' % (target, target_dir % 'backup')
+        target += target_dir % 'files'
 
-        if '--backup-dir=%s' in current_rsync:
+        if '--backup-dir=%s' in rsync_config:
             if ' ' in current_backup_dir:
                 print('The --backup-dir has whitespaces in it "%s",' +
                       ' removing it.' % current_backup_dir)
-                current_rsync = current_rsync.replace('--backup-dir=%s', '')
+                rsync_config = rsync_config.replace('--backup-dir=%s', '')
             else:
-                current_rsync = current_rsync % ('"%s"' % current_backup_dir)
+                rsync_config = rsync_config % ('"%s"' % current_backup_dir)
 
-        if not exists(current_target):
-            makedirs(current_target)
-        current_target = '"%s"' % current_target
+        if not os.path.exists(target):
+            os.makedirs(target)
+        target = '"%s"' % target
 
-        if os.path.isdir(source['source']):
-            s = '%s/' % source['source']
+        if os.path.isdir(source['path']):
+            path = '%s/' % source['path']
         else:
-            s = source['source']
+            path = source['path']
         rsync = '%srsync %s %s %s %s' % ('sudo ' if rsync_root else '',
-                                         exclude, current_rsync, s,
-                                         current_target)
+                                         exclude, rsync_config, path, target)
         print(rsync)
         p = Popen(rsync, stdout=PIPE, stderr=PIPE, shell=True)
 
@@ -302,23 +321,23 @@ def backup(options, sources, snapshot, root_snapshot):
 
     if options['git']:
         timestamp = time.strftime('%Y-%m-%dT%H:%M:%S%z', time.localtime())
-        for base_dir in base_dirs:
+        for base_dir in base_dirs.keys():
             print('Commit changes in "%s"' % base_dir)
-            os.chdir('%s/Files' % base_dir)
+            os.chdir('%s/files' % base_dir)
 
             if options['git_root'] and not os.system('sudo git rev-parse') == 0:
                 os.system('sudo git init')
             elif not options['git_root'] and not os.system('git rev-parse') == 0:
                 os.system('git init')
 
-            if exists('.gitmodules'):
+            if os.path.exists('.gitmodules'):
                 _delete_gitmodules(options['git_root'])
 
             gits = _find_gits(options['git_root'])
             if gits:
                 _write_gitmodules(gits)
             else:
-                if exists('.gitmodules'):
+                if os.path.exists('.gitmodules'):
                     os.remove('.gitmodules')
 
             git_add = 'git add -A'
@@ -331,16 +350,16 @@ def backup(options, sources, snapshot, root_snapshot):
                 os.system(git_commit)
             print('-' * 100)
 
-    if snapshot or root_snapshot:
+    if snapshot:
         t = time.localtime()
         timestamp = time.strftime('%Y%m%dT%H%M%S%z', t)
-        for base_dir in base_dirs:
+        for base_dir, root in base_dirs.items():
             send_notification('Taking snapshot of "%s".' % base_dir)
             print('Taking snapshot of: "%s"' % base_dir)
 
-            if not exists('%s/snapshots' % base_dir):
-                makedirs('%s/snapshots' % base_dir)
-            os.chdir('%s/Files' % base_dir)
+            if not os.path.exists('%s/snapshots' % base_dir):
+                os.makedirs('%s/snapshots' % base_dir)
+            os.chdir('%s/files' % base_dir)
             if options['git']:
                 msg = time.strftime('Snapshot from %d. %B %Y %H:%M:%S%z.', t)
                 git_tag = "git tag -a v%s -m '%s'" % (timestamp, msg)
@@ -348,9 +367,11 @@ def backup(options, sources, snapshot, root_snapshot):
                     os.system('sudo %s' % git_tag)
                 else:
                     os.system(git_tag)
-            tar = 'tar -czf ../snapshots/%s.tar.gz * .??*' % timestamp
-            print("%s%s" % ('sudo ' if root_snapshot else '', tar))
-            os.system("%s%s" % ('sudo ' if root_snapshot else '', tar))
+            tar = 'tar -czf ../snapshots/%s.tar.gz *' % timestamp
+            if _has_hidden_files(base_dir):
+                tar += ' .??*'
+            print("%s%s" % ('sudo ' if root else '', tar))
+            os.system("%s%s" % ('sudo ' if root else '', tar))
             print('-' * 100)
 
 
@@ -371,16 +392,15 @@ def postgres_dump(options, pgsqls):
     for db in pgsqls:
         print('Backup of: "%s"' % db['name'])
         if 'target' in db:
-            current_target = db['target']
+            path = db['target']
         else:
             hostname = db['ssh'] if 'ssh' in db else socket.gethostname()
-            current_target = '%s/%s/db-dumps/PostgreSQL/%s' % (options['target'],
-                                                               hostname,
-                                                               db['name'])
+            path = '%s/%s/db-dumps/PostgreSQL/%s' % (options['target'],
+                                                     hostname, db['name'])
 
-        if not exists(current_target):
-            makedirs(current_target)
-        current_target = '"%s"' % current_target
+        if not os.path.exists(path):
+            os.makedirs(path)
+        path = '"%s"' % path
 
         command = 'ssh %s ' % db['ssh'] if 'ssh' in db else ''
         if 'pass' in db:
@@ -393,8 +413,7 @@ def postgres_dump(options, pgsqls):
         command += ' pg_dump --username=%s' % db['user']
         if 'options' in db:
             command += ' %s' % db['options']
-        path = os.path.join(current_target, '%s_%s.sql.gz' % (db['name'],
-                                                              timestamp))
+        path = os.path.join(path, '%s_%s.sql.gz' % (db['name'], timestamp))
         command += ' %s | gzip -c > %s' % (db['name'], path)
         os.system(command)
     print('-' * 100)
@@ -409,30 +428,28 @@ def mysql_dump(options, mysqls):
     for db in mysqls:
         print('Backup of: "%s"' % db['name'])
         if 'target' in db:
-            current_target = db['target']
+            path = db['target']
         else:
             hostname = db['ssh'] if 'ssh' in db else socket.gethostname()
-            current_target = '%s/%s/db-dumps/MySQL/%s' % (options['target'],
-                                                          hostname,
-                                                          db['name'])
+            path = '%s/%s/db-dumps/MySQL/%s' % (options['target'], hostname,
+                                                db['name'])
 
-        if not exists(current_target):
-            makedirs(current_target)
-        current_target = '"%s"' % current_target
+        if not os.path.exists(path):
+            os.makedirs(path)
+        path = '"%s"' % path
 
         command = 'ssh %s ' % db['ssh'] if 'ssh' in db else ''
         command += 'mysqldump --user=%s' % db['user']
         if 'pass' in db:
-            command += '--password=%s' % _pass(db['pass'])
+            command += ' --password=%s' % _pass(db['pass'])
         elif 'password' in db:
-            command += '--password=%s' % db['password']
+            command += ' --password=%s' % db['password']
         else:
             command += ''
 
         if 'options' in db:
             command += ' %s' % db['options']
-        path = os.path.join(current_target, '%s_%s.sql.gz' % (db['name'],
-                                                              timestamp))
+        path = os.path.join(path, '%s_%s.sql.gz' % (db['name'], timestamp))
         command += ' %s | gzip -c > %s' % (db['name'], path)
         os.system(command)
     print('-' * 100)
@@ -458,10 +475,9 @@ def _write_gitmodules(submodules):
 
 
 def _find_gits(root=False):
-    p = Popen(('sudo ' if root else '') +
-              'find . -type d \( -exec /usr/bin/test -d "{}/.git" -a ' +
-              '"{}" != "." \; -print -prune -o -name .git -prune \)',
-              stdout=PIPE, shell=True)
+    command = ('find . -type d \( -exec /usr/bin/test -d "{}/.git" -a ' +
+               '"{}" != "." \; -print -prune -o -name .git -prune \)')
+    p = Popen('sudo %s' % command if root else command, stdout=PIPE, shell=True)
     return p.communicate()[0].decode('utf-8').strip()
 
 
@@ -473,12 +489,21 @@ def _pass(path):
         return ''
 
 
-def _write_logfile(base_dir, timestamp, rsync, out, err):
-    log_dir = join(base_dir, 'log')
-    if not exists(log_dir):
-        makedirs(log_dir)
+def _has_hidden_files(path):
+    if path:
+        p = Popen('ls -A | grep "^\." | wc -l', stdout=PIPE, shell=True)
+        return int(p.communicate()[0].decode('utf-8').split('\n')[0]) != 0
+    else:
+        return False
 
-    with open(join(log_dir, '%s.log' % timestamp), 'a', encoding='utf-8') as f:
+
+def _write_logfile(base_dir, timestamp, rsync, out, err):
+    log_dir = os.path.join(base_dir, 'log')
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+    log_file = os.path.join(log_dir, '%s.log' % timestamp)
+    with open(log_file, 'a', encoding='utf-8') as f:
         f.write('%s\n' % ('-' * 100))
         f.write('%s\n' % rsync)
         f.write('%s\n' % ('-' * 100))
@@ -488,85 +513,50 @@ def _write_logfile(base_dir, timestamp, rsync, out, err):
         f.write('%s\n' % ('-' * 100))
 
 
-def run():
-    usage = 'usage: %prog [options]'
-    parser = OptionParser(usage)
-    parser.add_option('-t', '--target', action='store', type='string',
-                      dest='target')
-    parser.add_option('-x', '--xml', action='store', type='string', dest='xml')
-    parser.add_option('-v', '--is-valid', action='store_true',
-                      dest='check_valid',
-                      help='checks the given xml file on valid')
-    parser.add_option('-d', '--no-database', action='store_true',
-                      dest='database', help='disables database dump')
-    parser.add_option('-p', '--no-postgres', action='store_true',
-                      dest='postgres', help='disables PostgreSQL dump')
-    parser.add_option('-m', '--no-mysql', action='store_true',
-                      dest='mysql', help='disables MySQL dump')
-    parser.add_option('-s', '--snapshot', action='store_true',
-                      dest='snapshot', help='make snapshot')
-    parser.add_option('-r', '--root-snapshot', action='store_true',
-                      dest='root_snapshot', help='make snapshot')
-    parser.add_option('--version', action='store_true', dest='version',
-                      help='show version information')
-    (cmd_options, cmd_args) = parser.parse_args()
+if __name__ == '__main__':
+    Notify.init('psync')
+
+    parser = ArgumentParser(prog='psync', formatter_class=RawTextHelpFormatter)
+    parser.add_argument('-v', '--version', action='version', version=__app__)
+    parser.add_argument('-t', '--target', help='Backup target')
+    parser.add_argument('-x', '--xml', dest='xml', help='XML config file')
+    parser.add_argument('--is-valid', action='store_true', dest='check_valid',
+                        help='checks the given xml file on valid')
+    parser.add_argument('-d', '--no-database', action='store_true',
+                        dest='database', help='Disables database dumps')
+    parser.add_argument('-p', '--no-postgres', action='store_true',
+                        dest='postgres', help='Disables PostgreSQL dumps')
+    parser.add_argument('-m', '--no-mysql', action='store_true',
+                        dest='mysql', help='Disables MySQL dumps')
+    parser.add_argument('-s', '--snapshot', action='store_true',
+                        dest='snapshot', help='Make a snapshot')
+    args = parser.parse_args()
 
     pipeline = {}
-    if cmd_options.xml is not None:
-        if cmd_options.check_valid:
-            check_valid(cmd_options.xml, load(cmd_options.xml))
-            print('xml file "%s" is valid.' % cmd_options.xml)
+    if args.xml is not None:
+        if args.check_valid:
+            check_valid(args.xml, load(args.xml))
+            print('XML file "%s" is valid.' % args.xml)
             sys.exit(0)
         else:
-            options, sources, mysqls, pgsqls, pipeline = \
-                    parse(cmd_options.xml, cmd_options.target)
-    elif cmd_options.version:
-        github = 'https://github.com/jnphilipp/psync'
-        print('###########################################')
-        print('#                  psync                  #')
-        print('#           python rsync wrapper          #')
-        print('#                                         #')
-        print('#%s%s%s#' % (' ' * floor((40 - len(__version__)) / 2),
-                            'v%s' % __version__,
-                            ' ' * ceil((40 - len(__version__)) / 2)))
-        print('#%s%s%s#' % (' ' * floor((41 - len(__license__)) / 2),
-                            __license__,
-                            ' ' * ceil((41 - len(__license__)) / 2)))
-        print('#                                         #')
-        print('#%s%s%s#' % (' ' * floor((41 - len(__author__)) / 2),
-                            __author__,
-                            ' ' * ceil((41 - len(__author__)) / 2)))
-        print('#%s%s%s#' % (' ' * floor((41 - len(__email__)) / 2),
-                            __email__,
-                            ' ' * ceil((41 - len(__email__)) / 2)))
-        print('#                                         #')
-        print('#%s%s%s#' % (' ' * floor((41 - len(github)) / 2),
-                            github,
-                            ' ' * ceil((41 - len(github)) / 2)))
-        print('###########################################')
+            options, sources, mysqls, pgsqls, pipeline = parse(args.xml,
+                                                               args.target)
     else:
-        parser.print_help()
+        parser.print_usage()
 
     for k, v in sorted(pipeline.items()):
         if v == 'backup':
-            backup(options, sources, cmd_options.snapshot,
-                   cmd_options.root_snapshot)
-        elif v == 'db_dump' and not cmd_options.database:
-            if not cmd_options.mysql:
+            backup(options, sources, args.snapshot)
+        elif v == 'db_dump' and not args.database:
+            if not args.mysql:
                 mysql_dump(options, mysqls)
-            if not cmd_options.postgres:
+            if not args.postgres:
                 postgres_dump(options, pgsqls)
-        elif v == 'postgres_dump' and not (cmd_options.postgres or
-                                           cmd_options.database):
+        elif v == 'postgres_dump' and not (args.postgres or args.database):
             postgres_dump(options, pgsqls)
-        elif v == 'mysql_dump' and not (cmd_options.mysql or
-                                        cmd_options.database):
+        elif v == 'mysql_dump' and not (args.mysql or args.database):
             mysql_dump(options, mysqls)
         elif v == 'pre_backup_script':
             run_script(options['pre_backup_script'])
         elif v == 'post_backup_script':
             run_script(options['pre_backup_script'])
-
-if __name__ == '__main__':
-    Notify.init('psync')
-    run()
