@@ -40,9 +40,17 @@ __license__ = 'GPLv3'
 __version__ = '0.1.4'
 
 
-NAMESPACE = {'p':'http://jnphilipp.org/psync/'}
-BOOLEAN_STATES = {'1':True, 'yes':True, 'true':True, 'on':True,
-                    '0':False, 'no':False, 'false':False, 'off':False}
+NAMESPACE = {'p': 'http://jnphilipp.org/psync/'}
+BOOLEAN_STATES = {
+    '1': True,
+    'yes': True,
+    'true': True,
+    'on': True,
+    '0': False,
+    'no': False,
+    'false': False,
+    'off': False
+}
 
 
 def get_boolean(string, default=False):
@@ -77,7 +85,12 @@ def parse(path, target=None):
     doc = load(path)
     check_valid(path, doc)
 
-    options = {'target':None, 'git':True, 'git_root':False, 'rsync_root':False}
+    options = {
+        'target': None,
+        'git': True,
+        'git_root': False,
+        'rsync_root': False
+    }
     if doc.find('p:options/p:git', namespaces=NAMESPACE) is not None:
         o = doc.find('p:options/p:git', namespaces=NAMESPACE)
         options['git'] = get_boolean(o.text.strip(), True)
@@ -105,28 +118,37 @@ def parse(path, target=None):
 
     pipeline = {}
     for step in doc.xpath('p:pipeline/*', namespaces=NAMESPACE):
-        pipeline[int(step.attrib['no'].strip())] = step.text.strip()
-        if pipeline[int(step.attrib['no'].strip())] == 'backup' and \
-                not options['target']:
-          print('no target provided. aborting...')
-          sys.exit(1)
+        step_no = int(step.attrib['no'].strip())
+        pipeline[step_no] = step.text.strip()
+        if pipeline[step_no] == 'backup' and not options['target']:
+            print('No target provided. aborting...')
+            sys.exit(1)
 
-    sources = parse_sources(doc)
-    pgsqls = parse_dbs(doc.xpath('p:databases/p:postgresql/*', namespaces=NAMESPACE))
-    mysqls = parse_dbs(doc.xpath('p:databases/p:mysql/*', namespaces=NAMESPACE))
-    parse_db_files(doc.xpath('p:databases/p:file', namespaces=NAMESPACE), mysqls, pgsqls)
-    return (options, sources, mysqls, pgsqls, pipeline)
+    sources, mysqls, pgsqls = parse_sources(doc, options['target'])
+    pgsqls += parse_dbs(doc.xpath('p:databases/p:postgresql/*',
+                                  namespaces=NAMESPACE))
+    mysqls += parse_dbs(doc.xpath('p:databases/p:mysql/*',
+                                  namespaces=NAMESPACE))
+    parse_db_files(doc.xpath('p:databases/p:file',
+                             namespaces=NAMESPACE), mysqls, pgsqls)
+    return options, sources, mysqls, pgsqls, pipeline
 
 
-def parse_sources(doc):
+def parse_sources(doc, target):
     sources = []
+    mysqls = []
+    pgsqls = []
     for s in doc.xpath('p:sources/p:source', namespaces=NAMESPACE):
-        source = {'source': s.find('p:path', namespaces=NAMESPACE).text.strip()}
+        source = {
+            'source': s.find('p:path', namespaces=NAMESPACE).text.strip()
+        }
         if s.find('p:exclude', namespaces=NAMESPACE) is not None:
-            source['exclude'] = [e.text.strip() for e in s.iterfind('p:exclude',
-                                                                    namespaces=NAMESPACE)]
+            source['exclude'] = []
+            for e in s.iterfind('p:exclude', namespaces=NAMESPACE):
+                source['exclude'].append(e.text.strip())
         if s.find('p:target', namespaces=NAMESPACE) is not None:
-            source['target'] = s.find('p:target', namespaces=NAMESPACE).text.strip()
+            source['target'] = s.find('p:target',
+                                      namespaces=NAMESPACE).text.strip()
         if s.find('p:rsync', namespaces=NAMESPACE) is not None:
             o = s.find('p:rsync', namespaces=NAMESPACE)
             source['rsync'] = o.text.strip()
@@ -138,13 +160,18 @@ def parse_sources(doc):
         sources.append(source)
 
     for f in doc.xpath('p:sources/p:file', namespaces=NAMESPACE):
-        fdoc = load(f.text.strip())
-        check_valid(f.text.strip(), fdoc)
-        s = parse_sources(fdoc)
+        options, fsources, fmysqls, fpgsqls, _ = parse(f.text.strip(), target)
+        for fsource in fsources:
+            fsource['root'] = options['rsync_root']
+            if 'rsync' in options:
+                fsource['rsync'] = options['rsync']
         if 'root' in f.attrib:
-            for i in s: i['root'] = get_boolean(f.attrib['root'], False)
-        sources += s
-    return sources
+            for fsource in fsources:
+                fsource['root'] = get_boolean(f.attrib['root'], False)
+        sources += fsources
+        mysqls += fmysqls
+        pgsqls += fpgsqls
+    return sources, mysqls, pgsqls
 
 
 def parse_db_files(file_iter, mysqls, pgsqls):
@@ -154,7 +181,8 @@ def parse_db_files(file_iter, mysqls, pgsqls):
         check_valid(path, doc)
         pgsqls += (parse_dbs(doc.xpath('p:databases/p:postgresql/*',
                                        namespaces=NAMESPACE)))
-        mysqls += (parse_dbs(doc.xpath('p:databases/p:mysql/*', namespaces=NAMESPACE)))
+        mysqls += (parse_dbs(doc.xpath('p:databases/p:mysql/*',
+                                       namespaces=NAMESPACE)))
         parse_db_files(doc.xpath('p:databases/p:file',
                                  namespaces=NAMESPACE), mysqls, pgsqls)
 
@@ -162,18 +190,25 @@ def parse_db_files(file_iter, mysqls, pgsqls):
 def parse_dbs(db_iter):
     dbs = []
     for c in db_iter:
-        db = {'name': c.find('p:name', namespaces=NAMESPACE).text.strip(),
-                'user': c.find('p:user', namespaces=NAMESPACE).text.strip()}
+        db = {
+            'name': c.find('p:name', namespaces=NAMESPACE).text.strip(),
+            'user': c.find('p:user', namespaces=NAMESPACE).text.strip()
+        }
         if c.find('p:password', namespaces=NAMESPACE) is not None:
-            db['password'] = c.find('p:password', namespaces=NAMESPACE).text.strip()
+            db['password'] = c.find('p:password',
+                                    namespaces=NAMESPACE).text.strip()
         if c.find('p:pass', namespaces=NAMESPACE) is not None:
-            db['pass'] = c.find('p:pass', namespaces=NAMESPACE).text.strip()
+            db['pass'] = c.find('p:pass',
+                                namespaces=NAMESPACE).text.strip()
         if c.find('p:target', namespaces=NAMESPACE) is not None:
-            db['target'] = c.find('p:target', namespaces=NAMESPACE).text.strip()
+            db['target'] = c.find('p:target',
+                                  namespaces=NAMESPACE).text.strip()
         if c.find('p:options', namespaces=NAMESPACE) is not None:
-            db['options'] = c.find('p:options', namespaces=NAMESPACE).text.strip()
+            db['options'] = c.find('p:options',
+                                   namespaces=NAMESPACE).text.strip()
         if c.find('p:ssh', namespaces=NAMESPACE) is not None:
-            db['ssh'] = c.find('p:ssh', namespaces=NAMESPACE).text.strip()
+            db['ssh'] = c.find('p:ssh',
+                               namespaces=NAMESPACE).text.strip()
         dbs.append(db)
     return dbs
 
@@ -190,9 +225,21 @@ def backup(options, sources, snapshot, root_snapshot):
         exclude = ''
         if 'exclude' in source:
             exclude = ' '.join('--exclude="%s"' % e for e in source['exclude'])
-        current_rsync = source['rsync'] if 'rsync' in source else options['rsync']
-        current_target = source['target'] if 'target' in source else options['target']
-        rsync_root = source['root'] if 'root' in source else options['rsync_root']
+
+        if 'rsync' in source:
+            current_rsync = source['rsync']
+        else:
+            current_rsync = options['rsync']
+
+        if 'target' in source:
+            current_target = source['target']
+        else:
+            current_target = options['target']
+
+        if 'root' in source:
+            rsync_root = source['root']
+        else:
+            rsync_root = options['rsync_root']
 
         match = re.match(r'^([^/]+@)?[^/]+:', source['source'])
         if match:
@@ -209,7 +256,16 @@ def backup(options, sources, snapshot, root_snapshot):
             target_dir = '/%s/%%s%s' % (hostname, s)
         base_dir = '%s/%s' % (current_target, hostname)
         base_dirs.add(base_dir)
+        current_backup_dir = '%s%s' % (current_target, target_dir % 'backup')
         current_target += target_dir % 'files'
+
+        if '--backup-dir=%s' in current_rsync:
+            if ' ' in current_backup_dir:
+                print('The --backup-dir has whitespaces in it "%s",' +
+                      ' removing it.' % current_backup_dir)
+                current_rsync = current_rsync.replace('--backup-dir=%s', '')
+            else:
+                current_rsync = current_rsync % ('"%s"' % current_backup_dir)
 
         if not exists(current_target):
             makedirs(current_target)
@@ -234,13 +290,13 @@ def backup(options, sources, snapshot, root_snapshot):
         err = ('\n%s' % p.communicate()[1].decode('utf-8')).strip()
         print()
         print('-' * 100)
-        print('rsync errors\n%s'  % err)
+        print('rsync errors\n%s' % err)
         _write_logfile(base_dir, timestamp, rsync, out, err)
 
         if 'post_script' in source:
             print('-' * 100)
             send_notification('Start post script "%s".' % source['post_script'])
-            print('Start post script "%s".'  % source['post_script'])
+            print('Start post script "%s".' % source['post_script'])
             os.system(source['post_script'])
         print('-' * 100)
 
@@ -249,9 +305,11 @@ def backup(options, sources, snapshot, root_snapshot):
         for base_dir in base_dirs:
             print('Commit changes in "%s"' % base_dir)
             os.chdir('%s/Files' % base_dir)
-            if not os.system('%sgit rev-parse' % \
-                             ('sudo ' if options['git_root'] else '')) == 0:
-                os.system('%sgit init' % ('sudo ' if options['git_root'] else ''))
+
+            if options['git_root'] and not os.system('sudo git rev-parse') == 0:
+                os.system('sudo git init')
+            elif not options['git_root'] and not os.system('git rev-parse') == 0:
+                os.system('git init')
 
             if exists('.gitmodules'):
                 _delete_gitmodules(options['git_root'])
@@ -263,9 +321,14 @@ def backup(options, sources, snapshot, root_snapshot):
                 if exists('.gitmodules'):
                     os.remove('.gitmodules')
 
-            os.system('%sgit add -A' % ('sudo ' if options['git_root'] else ''))
-            os.system("%sgit commit -m 'backup from %s.'" % ('sudo ' \
-                            if options['git_root'] else '', timestamp))
+            git_add = 'git add -A'
+            git_commit = 'git commit -m "Backup from %s."' % timestamp
+            if options['git_root']:
+                os.system('sudo %s' % git_add)
+                os.system('sudo %s' % git_commit)
+            else:
+                os.system(git_add)
+                os.system(git_commit)
             print('-' * 100)
 
     if snapshot or root_snapshot:
@@ -279,9 +342,12 @@ def backup(options, sources, snapshot, root_snapshot):
                 makedirs('%s/snapshots' % base_dir)
             os.chdir('%s/Files' % base_dir)
             if options['git']:
-                os.system("%sgit tag -a v%s -m '%s'" % ('sudo ' \
-                            if options['git_root'] else '', timestamp,
-                    time.strftime('snapshot from %d. %B %Y %H:%M:%S%z.', t)))
+                msg = time.strftime('Snapshot from %d. %B %Y %H:%M:%S%z.', t)
+                git_tag = "git tag -a v%s -m '%s'" % (timestamp, msg)
+                if options['git_root']:
+                    os.system('sudo %s' % git_tag)
+                else:
+                    os.system(git_tag)
             tar = 'tar -czf ../snapshots/%s.tar.gz * .??*' % timestamp
             print("%s%s" % ('sudo ' if root_snapshot else '', tar))
             os.system("%s%s" % ('sudo ' if root_snapshot else '', tar))
@@ -328,6 +394,9 @@ def postgres_dump(options, pgsqls):
         if 'options' in db:
             command += ' %s' % db['options']
         path = os.path.join(current_target, '%s_%s.sql.gz' % (db['name'],
+                                                              timestamp))
+        command += ' %s | gzip -c > %s' % (db['name'], path)
+        os.system(command)
     print('-' * 100)
 
 
@@ -375,8 +444,8 @@ def _delete_gitmodules(root=False):
     with open('.gitmodules', 'r') as f:
         for line in f:
             if line.startswith('    path = '):
-                call('%sgit rm -r --cached "%s"' % ('sudo ' if root else '',
-                                                    line[11:].strip()), shell=True)
+                git_rm = 'git rm -r --cached "%s"' & line[11:].strip()
+                call('%s%s' % ('sudo ' if root else '', git_rm), shell=True)
 
 
 def _write_gitmodules(submodules):
@@ -423,26 +492,27 @@ def run():
     usage = 'usage: %prog [options]'
     parser = OptionParser(usage)
     parser.add_option('-t', '--target', action='store', type='string',
-                dest='target')
+                      dest='target')
     parser.add_option('-x', '--xml', action='store', type='string', dest='xml')
     parser.add_option('-v', '--is-valid', action='store_true',
-                dest='check_valid', help='checks the given xml file on valid')
+                      dest='check_valid',
+                      help='checks the given xml file on valid')
     parser.add_option('-d', '--no-database', action='store_true',
-                dest='database', help='disables database dump')
+                      dest='database', help='disables database dump')
     parser.add_option('-p', '--no-postgres', action='store_true',
-                dest='postgres', help='disables PostgreSQL dump')
+                      dest='postgres', help='disables PostgreSQL dump')
     parser.add_option('-m', '--no-mysql', action='store_true',
-                dest='mysql', help='disables MySQL dump')
+                      dest='mysql', help='disables MySQL dump')
     parser.add_option('-s', '--snapshot', action='store_true',
-                dest='snapshot', help='make snapshot')
+                      dest='snapshot', help='make snapshot')
     parser.add_option('-r', '--root-snapshot', action='store_true',
-                dest='root_snapshot', help='make snapshot')
+                      dest='root_snapshot', help='make snapshot')
     parser.add_option('--version', action='store_true', dest='version',
-                help='show version information')
+                      help='show version information')
     (cmd_options, cmd_args) = parser.parse_args()
 
     pipeline = {}
-    if cmd_options.xml != None:
+    if cmd_options.xml is not None:
         if cmd_options.check_valid:
             check_valid(cmd_options.xml, load(cmd_options.xml))
             print('xml file "%s" is valid.' % cmd_options.xml)
@@ -480,17 +550,17 @@ def run():
     for k, v in sorted(pipeline.items()):
         if v == 'backup':
             backup(options, sources, cmd_options.snapshot,
-                    cmd_options.root_snapshot)
+                   cmd_options.root_snapshot)
         elif v == 'db_dump' and not cmd_options.database:
             if not cmd_options.mysql:
                 mysql_dump(options, mysqls)
             if not cmd_options.postgres:
                 postgres_dump(options, pgsqls)
-        elif v == 'postgres_dump' and \
-                        not (cmd_options.postgres or cmd_options.database):
+        elif v == 'postgres_dump' and not (cmd_options.postgres or
+                                           cmd_options.database):
             postgres_dump(options, pgsqls)
-        elif v == 'mysql_dump' and \
-                        not (cmd_options.mysql or cmd_options.database):
+        elif v == 'mysql_dump' and not (cmd_options.mysql or
+                                        cmd_options.database):
             mysql_dump(options, mysqls)
         elif v == 'pre_backup_script':
             run_script(options['pre_backup_script'])
