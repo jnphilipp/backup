@@ -390,11 +390,12 @@ def postgres_dump(options, pgsqls):
 
     timestamp = time.strftime('%Y%m%dT%H%M%S%z', time.localtime())
     for db in pgsqls:
-        print('Backup of: "%s"' % db['name'])
+        hostname = db['ssh'] if 'ssh' in db else socket.gethostname()
+        print('PostgreSQL dump: "%s %s"' % (hostname, db['name']))
+
         if 'target' in db:
             path = db['target']
         else:
-            hostname = db['ssh'] if 'ssh' in db else socket.gethostname()
             path = '%s/%s/db-dumps/PostgreSQL/%s' % (options['target'],
                                                      hostname, db['name'])
 
@@ -426,11 +427,12 @@ def mysql_dump(options, mysqls):
 
     timestamp = time.strftime('%Y%m%dT%H%M%S%z', time.localtime())
     for db in mysqls:
-        print('Backup of: "%s"' % db['name'])
+        hostname = db['ssh'] if 'ssh' in db else socket.gethostname()
+        print('MySQL dump: "%s %s"' % (hostname, db['name']))
+
         if 'target' in db:
             path = db['target']
         else:
-            hostname = db['ssh'] if 'ssh' in db else socket.gethostname()
             path = '%s/%s/db-dumps/MySQL/%s' % (options['target'], hostname,
                                                 db['name'])
 
@@ -439,14 +441,14 @@ def mysql_dump(options, mysqls):
         path = '"%s"' % path
 
         command = 'ssh %s ' % db['ssh'] if 'ssh' in db else ''
-        command += 'mysqldump --user=%s' % db['user']
         if 'pass' in db:
-            command += ' --password=%s' % _pass(db['pass'])
+            command += ' MYSQL_PWD=%s ' % _pass(db['pass'])
         elif 'password' in db:
-            command += ' --password=%s' % db['password']
+            command += ' MYSQL_PWD=%s ' % db['password']
         else:
             command += ''
 
+        command += 'mysqldump --user=%s' % db['user']
         if 'options' in db:
             command += ' %s' % db['options']
         path = os.path.join(path, '%s_%s.sql.gz' % (db['name'], timestamp))
