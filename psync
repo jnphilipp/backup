@@ -391,7 +391,7 @@ def postgres_dump(options, pgsqls):
     timestamp = time.strftime('%Y%m%dT%H%M%S%z', time.localtime())
     for db in pgsqls:
         hostname = db['ssh'] if 'ssh' in db else socket.gethostname()
-        print('PostgreSQL dump: "%s %s"' % (hostname, db['name']))
+        print('Dump: "%s@%s"' % (db['name'], hostname))
 
         if 'target' in db:
             path = db['target']
@@ -428,7 +428,7 @@ def mysql_dump(options, mysqls):
     timestamp = time.strftime('%Y%m%dT%H%M%S%z', time.localtime())
     for db in mysqls:
         hostname = db['ssh'] if 'ssh' in db else socket.gethostname()
-        print('MySQL dump: "%s %s"' % (hostname, db['name']))
+        print('Dump: "%s@%s"' % (db['name'], hostname))
 
         if 'target' in db:
             path = db['target']
