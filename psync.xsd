@@ -9,6 +9,10 @@
             <xs:selector xpath=".//step"/>
             <xs:field xpath="@no"/>
         </xs:unique>
+        <xs:unique name="UniqueScriptId">
+            <xs:selector xpath=".//script"/>
+            <xs:field xpath="@id"/>
+        </xs:unique>
         <xs:unique name="UniqueSourcePath">
             <xs:selector xpath=".//source/path"/>
             <xs:field xpath="."/>
@@ -18,6 +22,7 @@
     <xs:complexType name="psyncType">
         <xs:sequence>
             <xs:element name="options" type="p:optionsType" minOccurs="0"/>
+            <xs:element name="scripts" type="p:scriptsType" minOccurs="0"/>
             <xs:element name="sources" type="p:sourcesType" minOccurs="0"/>
             <xs:element name="databases" type="p:databasesType" minOccurs="0"/>
             <xs:element name="pipeline" type="p:pipelineType"/>
@@ -26,20 +31,9 @@
 
     <xs:complexType name="optionsType">
         <xs:sequence>
-            <xs:element name="git" type="p:gitType" minOccurs="0"/>
             <xs:element name="rsync" type="p:rootStrType" minOccurs="0"/>
             <xs:element name="target" type="xs:string" minOccurs="0"/>
-            <xs:element name="pre_backup_script" type="xs:string" minOccurs="0"/>
-            <xs:element name="post_backup_script" type="xs:string" minOccurs="0"/>
         </xs:sequence>
-    </xs:complexType>
-
-    <xs:complexType name="gitType">
-        <xs:simpleContent>
-            <xs:extension base="p:BooleanType">
-                <xs:attribute name="root" type="p:BooleanType" use="optional"/>
-            </xs:extension>
-        </xs:simpleContent>
     </xs:complexType>
 
     <xs:complexType name="rootStrType">
@@ -79,14 +73,23 @@
 
     <xs:simpleType name="stepValueType">
         <xs:restriction base="xs:string">
-            <xs:enumeration value="backup"/>
-            <xs:enumeration value="db_dump"/>
-            <xs:enumeration value="postgres_dump"/>
-            <xs:enumeration value="mysql_dump"/>
-            <xs:enumeration value="pre_backup_script"/>
-            <xs:enumeration value="post_backup_script"/>
+            <xs:pattern value="backup|mysql-dbs|postgresql-dbs|script-[0-9]+"/>
         </xs:restriction>
     </xs:simpleType>
+
+    <xs:complexType name="scriptsType">
+        <xs:sequence>
+            <xs:element name="script" type="p:scriptType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="scriptType">
+        <xs:simpleContent>
+            <xs:extension base="xs:string">
+                <xs:attribute name="id" type="xs:integer" use="required"/>
+            </xs:extension>
+        </xs:simpleContent>
+    </xs:complexType>
 
     <xs:complexType name="sourcesType">
         <xs:sequence>
@@ -101,6 +104,7 @@
             <xs:element name="exclude" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
             <xs:element name="target" type="xs:string" minOccurs="0"/>
             <xs:element name="rsync" type="p:rootStrType" minOccurs="0"/>
+            <xs:element name="pre_script" type="xs:string" minOccurs="0"/>
             <xs:element name="post_script" type="xs:string" minOccurs="0"/>
         </xs:sequence>
     </xs:complexType>

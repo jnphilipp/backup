@@ -1,14 +1,13 @@
 #psync
 
-Python wrapper for rsync to easily configure rsync.
+Python wrapper for rsync for easy configuration.
 
 ##Features
- * Configure complex rsync backups over xml
+ * Configure complex rsync backups over XML
  * XML schema validation
- * Pre and post backup script
+ * Configurable scripts to run
  * Database dumps for MySQL and PostgreSQL
- * configurable pipeline
- * git repo for backed up files
+ * Configurable pipeline
 
 
 ##Install
@@ -17,5 +16,11 @@ Python wrapper for rsync to easily configure rsync.
 $ sudo make install
 ```
 
+##Debian-Package
+
+```
+$ make deb
+```
+
 ###Usage
-For options see `$ psync -h`. An exapmle xml configuration is in `test.xml`.
+For options see `$ psync -h`. An example XML configuration is in `test.xml`.

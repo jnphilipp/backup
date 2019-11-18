@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <psync xmlns="http://jnphilipp.org/psync/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jnphilipp.org/psync/ http://jnphilipp.org/psync/psync.xsd">
     <options>
-        <git root="yes">yes</git>
         <rsync>--delete-after --delete-excluded -aucPz</rsync>
     </options>
+    <scripts>
+        <script id="1">/home/user/Documents/some_script.sh</script>
+        <script id="2">/home/user/Downloads/cloud/other_script.sh</script>
+    </scripts>
     <sources>
         <file root="yes">/home/jnphilipp/.psync/root.xml</file>
         <source>
@@ -56,7 +59,10 @@
         </mysql>
     </databases>
     <pipeline>
-        <step no="1">db_dump</step>
-        <step no="2">backup</step>
+        <step no="1">script-1</step>
+        <step no="2">postgresql-dbs</step>
+        <step no="3">mysql-dbs</step>
+        <step no="4">script-2</step>
+        <step no="5">backup</step>
     </pipeline>
 </psync>
