@@ -340,7 +340,7 @@ class Script:
         t_stdout.start()
         t_stderr.start()
 
-        while t_stdout.isAlive() and t_stderr.isAlive():
+        while t_stdout.is_alive() and t_stderr.is_alive():
             pass
         pobj.wait()
 
