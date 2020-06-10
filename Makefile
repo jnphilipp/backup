@@ -13,8 +13,6 @@ else
 endif
 
 install: psync psync.xsd psync.bash-completion build/copyright build/changelog.Debian.gz build/psync.1.gz
-	$(Q)apt install python3-lxml rsync
-
 	$(Q)install -Dm 0755 psync "${BIN_DIR}"/psync
 	$(Q)install -Dm 0644 psync.xsd "${SHARE_DIR}"/psync/psync.xsd
 	$(Q)install -Dm 0644 psync.bash-completion "${BASH_COMPLETION_DIR}"/psync.bash-completion
