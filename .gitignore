@@ -1,6 +1,12 @@
 build/
+
+# Python
+__pycache__/
+.mypy_cache/
+
+# SublimeText
 *.sublime-project
 *.sublime-workspace
-.mypy_cache
-__pycache__
+
+# other
 .sync-exclude.lst

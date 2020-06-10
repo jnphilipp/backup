@@ -65,6 +65,7 @@ build/copyright: build
 	$(Q)echo " License version 3 can be found in the file" >> build/copyright
 	$(Q)echo " '/usr/share/common-licenses/GPL-3'." >> build/copyright
 
+build/copyright.h2m: build
 	$(Q)echo "[COPYRIGHT]" > build/copyright.h2m
 	$(Q)echo "This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version." >> build/copyright.h2m
 	$(Q)echo "" >> build/copyright.h2m
@@ -72,17 +73,17 @@ build/copyright: build
 	$(Q)echo "" >> build/copyright.h2m
 	$(Q)echo "You should have received a copy of the GNU General Public License along with this program. If not, see http://www.gnu.org/licenses/." >> build/copyright.h2m
 
-build/changelog: build
+build/changelog.Debian.gz: build
 	$(Q)declare TAGS=(`git tag`); for ((i=$${#TAGS[@]};i>=0;i--)); do if [ $$i -eq 0 ]; then git log $${TAGS[$$i]} --no-merges --format="psync ($${TAGS[$$i]}-%h) unstable; urgency=medium%n%n  * %s%n    %b%n -- %an <%ae>  %aD%n" | sed "/^\s*$$/d" >> build/changelog; elif [ $$i -eq $${#TAGS[@]} ]; then git log $${TAGS[$$i-1]}..HEAD --no-merges --format="psync ($${TAGS[$$i-1]}-%h) unstable; urgency=medium%n%n  * %s%n    %b%n -- %an <%ae>  %aD%n" | sed "/^\s*$$/d" >> build/changelog; else git log $${TAGS[$$i-1]}..$${TAGS[$$i]} --no-merges --format="psync ($${TAGS[$$i]}-%h) unstable; urgency=medium%n%n  * %s%n    %b%n -- %an <%ae>  %aD%n" | sed "/^\s*$$/d" >> build/changelog; fi; done
 	$(Q)cat build/changelog | gzip -n9 > build/changelog.Debian.gz
 
-build/psync.1.gz: build build/copyright
+build/psync.1.gz: build build/copyright.h2m
 	$(Q)help2man ./psync -i build/copyright.h2m -n "Python wrapper for rsync." | gzip -n9 > build/psync.1.gz
 
 build/package/DEBIAN: build
 	$(Q)mkdir -p build/package/DEBIAN
 
-build/package/DEBIAN/md5sums: psync psync.xsd psync.bash-completion build/copyright build/changelog build/psync.1.gz build/package/DEBIAN
+build/package/DEBIAN/md5sums: psync psync.xsd psync.bash-completion build/copyright build/changelog.Debian.gz build/psync.1.gz build/package/DEBIAN
 	$(Q)install -Dm 0755 psync build/package"${BIN_DIR}"/psync
 	$(Q)install -Dm 0644 psync.xsd build/package"${SHARE_DIR}"/psync/psync.xsd
 	$(Q)install -Dm 0644 psync.bash-completion build/package"${BASH_COMPLETION_DIR}"/psync.bash-completion
