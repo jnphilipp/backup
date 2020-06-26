@@ -1,10 +1,11 @@
-SHELL=/bin/bash
+SHELL:=/bin/bash
 
 BASH_COMPLETION_DIR?=/usr/share/bash-completion.d
 BIN_DIR?=/usr/bin
 DOC_DIR?=/usr/share/doc
 MAN_DIR?=/usr/share/man
 SHARE_DIR?=/usr/share
+DEST_DIR?=
 
 ifdef VERBOSE
   Q :=
@@ -13,12 +14,12 @@ else
 endif
 
 install: psync psync.xsd psync.bash-completion build/copyright build/changelog.Debian.gz build/psync.1.gz
-	$(Q)install -Dm 0755 psync "${BIN_DIR}"/psync
-	$(Q)install -Dm 0644 psync.xsd "${SHARE_DIR}"/psync/psync.xsd
-	$(Q)install -Dm 0644 psync.bash-completion "${BASH_COMPLETION_DIR}"/psync.bash-completion
-	$(Q)install -Dm 0644 build/changelog.Debian.gz "${DOC_DIR}"/psync/changelog.Debian.gz
-	$(Q)install -Dm 0644 build/copyright "${DOC_DIR}"/psync/copyright
-	$(Q)install -Dm 0644 build/psync.1.gz "${MAN_DIR}"/man1/psync.1.gz
+	$(Q)install -Dm 0755 psync "${DEST_DIR}/${BIN_DIR}"/psync
+	$(Q)install -Dm 0644 psync.xsd "${DEST_DIR}/${SHARE_DIR}"/psync/psync.xsd
+	$(Q)install -Dm 0644 psync.bash-completion "${DEST_DIR}/${BASH_COMPLETION_DIR}"/psync.bash-completion
+	$(Q)install -Dm 0644 build/changelog.Debian.gz "${DEST_DIR}/${DOC_DIR}"/psync/changelog.Debian.gz
+	$(Q)install -Dm 0644 build/copyright "${DEST_DIR}/${DOC_DIR}"/psync/copyright
+	$(Q)install -Dm 0644 build/psync.1.gz "${DEST_DIR}/${MAN_DIR}"/man1/psync.1.gz
 
 	@echo "psync install completed."
 
