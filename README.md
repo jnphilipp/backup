@@ -25,3 +25,7 @@ $ make deb
 ### Usage
 
 For options see `$ psync -h`. An example XML configuration is in `test.xml`.
+
+#### Icon
+
+Icon made from [Icon Fonts](http://www.onlinewebfonts.com/icon) is licensed by CC BY 3.0.

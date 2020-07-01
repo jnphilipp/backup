@@ -3,6 +3,7 @@ SHELL:=/bin/bash
 BASH_COMPLETION_DIR?=/usr/share/bash-completion.d
 BIN_DIR?=/usr/bin
 DOC_DIR?=/usr/share/doc
+ICON_DIR?=/usr/share/icons
 MAN_DIR?=/usr/share/man
 SHARE_DIR?=/usr/share
 DEST_DIR?=
@@ -20,6 +21,7 @@ install: psync psync.xsd psync.bash-completion build/copyright build/changelog.D
 	$(Q)install -Dm 0644 build/changelog.Debian.gz "${DEST_DIR}/${DOC_DIR}"/psync/changelog.Debian.gz
 	$(Q)install -Dm 0644 build/copyright "${DEST_DIR}/${DOC_DIR}"/psync/copyright
 	$(Q)install -Dm 0644 build/psync.1.gz "${DEST_DIR}/${MAN_DIR}"/man1/psync.1.gz
+	$(Q)install -Dm 0644 psync.svg "${DEST_DIR}/${ICON_DIR}"/hicolor/scalable/apps/psync.svg
 
 	@echo "psync install completed."
 
@@ -82,13 +84,14 @@ build/psync.1.gz: build build/copyright.h2m
 build/package/DEBIAN: build
 	$(Q)mkdir -p build/package/DEBIAN
 
-build/package/DEBIAN/md5sums: psync psync.xsd psync.bash-completion build/copyright build/changelog.Debian.gz build/psync.1.gz build/package/DEBIAN
+build/package/DEBIAN/md5sums: psync psync.xsd psync.bash-completion psync.svg build/copyright build/changelog.Debian.gz build/psync.1.gz build/package/DEBIAN
 	$(Q)install -Dm 0755 psync build/package"${BIN_DIR}"/psync
 	$(Q)install -Dm 0644 psync.xsd build/package"${SHARE_DIR}"/psync/psync.xsd
 	$(Q)install -Dm 0644 psync.bash-completion build/package"${BASH_COMPLETION_DIR}"/psync.bash-completion
 	$(Q)install -Dm 0644 build/changelog.Debian.gz build/package"${DOC_DIR}"/psync/changelog.Debian.gz
 	$(Q)install -Dm 0644 build/copyright build/package"${DOC_DIR}"/psync/copyright
 	$(Q)install -Dm 0644 build/psync.1.gz build/package"${MAN_DIR}"/man1/psync.1.gz
+	$(Q)install -Dm 0644 psync.svg build/package"${ICON_DIR}"/hicolor/scalable/apps/psync.svg
 
 	$(Q)mkdir -p build/package/DEBIAN
 	$(Q)md5sum `find build/package -type f -not -path "*DEBIAN*"` > build/md5sums
@@ -102,7 +105,7 @@ build/package/DEBIAN/control: build/package/DEBIAN/md5sums
 	$(Q)echo "Priority: optional" >> build/package/DEBIAN/control
 	$(Q)echo "Architecture: all" >> build/package/DEBIAN/control
 	$(Q)echo "Depends: python3 (>= 3.6), python3-lxml, rsync" >> build/package/DEBIAN/control
-	$(Q)echo "Recommends: pass" >> build/package/DEBIAN/control
+	$(Q)echo "Recommends: pass, python-notify2" >> build/package/DEBIAN/control
 	$(Q)echo "Installed-Size: `du -sk build/package/usr | grep -oE "[0-9]+"`" >> build/package/DEBIAN/control
 	$(Q)echo "Maintainer: J. Nathanael Philipp <nathanael@philipp.land>" >> build/package/DEBIAN/control
 	$(Q)echo "Homepage: https://github.com/jnphilipp/psync" >> build/package/DEBIAN/control

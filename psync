@@ -34,6 +34,10 @@ from math import ceil, floor
 from threading import Thread
 from typing import Dict, List, Optional, Set, Tuple, Type, TypeVar, Union
 
+try:
+    import notify2
+except ImportError as e:
+    pass
 
 __author__ = 'J. Nathanael Philipp (jnphilipp)'
 __email__ = 'nathanael@philipp.land'
@@ -523,6 +527,14 @@ def to_bool(string: str, default: bool = False) -> bool:
         return default
 
 
+def send_notification(msg):
+    try:
+        n = notify2.Notification('psync', msg, 'psync')
+        n.show()
+    except NameError as e:
+        pass
+
+
 def timestamp() -> str:
     return time.strftime('%Y%m%dT%H%M%S%z', time.localtime())
 
@@ -660,6 +672,8 @@ if __name__ == '__main__':
                         action='store_true')
     parser.add_argument('-f', '--log-format', help='Logging format.',
                         default='%(asctime)s %(levelname)s %(message)s')
+    parser.add_argument('-n', '--notify', action='store_true',
+                        help='Send notifications for pipeline steps.')
     args = parser.parse_args()
 
     if args.verbose:
@@ -668,6 +682,11 @@ if __name__ == '__main__':
     else:
         logging.basicConfig(filename=f'psync-{timestamp()}.log',
                             format=args.log_format, level=logging.INFO)
+    if args.notify:
+        try:
+            notify2.init('psync')
+        except NameError as e:
+            pass
 
     pipeline: Dict[int, str] = {}
     if args.xml is not None:
@@ -682,8 +701,13 @@ if __name__ == '__main__':
         parser.print_usage()
 
     for k, v in sorted(pipeline.items(), key=lambda x: x[0]):
+        if args.notify:
+            send_notification(f'Starting with {v} step.')
+
         if v == 'backup':
             for source in sources:
+                if args.notify:
+                    send_notification(f'Starting backup of {source.path}')
                 source.backup()
         elif v == 'postgresql-dbs' and not (args.postgres or args.database):
             for pgsql in pgsqls:
@@ -696,4 +720,6 @@ if __name__ == '__main__':
             scripts[int(v[7:])].run()
 
     if args.snapshot:
+        if args.notify:
+            send_notification('Taking snapshot.')
         snapshot(sources)
