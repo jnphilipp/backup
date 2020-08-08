@@ -42,7 +42,7 @@ except ImportError as e:
 __author__ = 'J. Nathanael Philipp (jnphilipp)'
 __email__ = 'nathanael@philipp.land'
 __license__ = 'GPLv3'
-__version__ = '0.2.6'
+__version__ = '0.2.7'
 __github__ = 'https://github.com/jnphilipp/psync'
 
 
@@ -160,6 +160,15 @@ class Database():
                                 stdout=subprocess.PIPE)
         return pobj.communicate()[0].decode('utf-8').split('\n')[0]
 
+    def _run(self, args: List[str], env: Dict[str, str], target: str):
+        with gzip.open(target, 'wt', encoding='utf8') as f:
+            pobj = subprocess.Popen(args, stdout=subprocess.PIPE, env=env,
+                                    stderr=subprocess.PIPE, encoding='utf8')
+            for line in pobj.stdout:
+                f.write(line)
+            pobj.wait()
+            return pobj
+
     def cmd(self) -> List[str]:
         pass
 
@@ -211,28 +220,23 @@ class PostgreSQL(Database):
         print(f'Dumping PostgreSQL database {self.name}.')
         logging.debug(f'Running PostgreSQL command: "{cmd}"')
 
-        pobj = subprocess.Popen(args, stdout=subprocess.PIPE, env=env,
-                                stderr=subprocess.PIPE, encoding='utf8')
-        stdout, stderr = pobj.communicate()
+        hostname = self.ssh if self.ssh is not None else socket.gethostname()
+        path = os.path.join(hostname, 'db-dumps', 'PostgreSQL', self.name)
+        if self.target is not None:
+            path = os.path.join(self.target, path)
+        if not os.path.exists(path):
+            os.makedirs(path)
 
-        if pobj.returncode == 0:
-            hostname = self.ssh if self.ssh is not None \
-                else socket.gethostname()
-            path = os.path.join(hostname, 'db-dumps', 'PostgreSQL', self.name)
-            if self.target is not None:
-                path = os.path.join(self.target, path)
-            if not os.path.exists(path):
-                os.makedirs(path)
+        path = os.path.join(path, f'{self.name}_{timestamp()}.sql.gz')
+        logging.debug(f'Storing {self.name} dump in {path}.')
 
-            path = os.path.join(path, f'{self.name}_{timestamp()}.sql.gz')
-            logging.debug(f'Storing {self.name} dump in {path}.')
-            with gzip.open(path, 'wt', encoding='utf8') as f:
-                f.write(stdout)
-        else:
+        pobj = self._run(args, env, path)
+        if pobj.returncode != 0:
+            err = pobj.stderr.read()
             logging.error(f'PostgreSQL {self.name} dump failed.')
-            logging.error(stderr.strip())
-            print(f'MySQL {self.name} dump failed.', file=sys.stderr)
-            print(stderr.strip(), file=sys.stderr)
+            logging.error(err.strip())
+            print(f'PostgreSQL {self.name} dump failed.', file=sys.stderr)
+            print(err.strip(), file=sys.stderr)
 
 
 class MySQL(Database):
@@ -279,28 +283,23 @@ class MySQL(Database):
         print(f'Dumping MySQL database {self.name}.')
         logging.debug(f'Running MySQL command: "{cmd}"')
 
-        pobj = subprocess.Popen(args, stdout=subprocess.PIPE, env=env,
-                                stderr=subprocess.PIPE, encoding='utf8')
-        stdout, stderr = pobj.communicate()
+        hostname = self.ssh if self.ssh is not None else socket.gethostname()
+        path = os.path.join(hostname, 'db-dumps', 'MySQL', self.name)
+        if self.target is not None:
+            path = os.path.join(self.target, path)
+        if not os.path.exists(path):
+            os.makedirs(path)
 
-        if pobj.returncode == 0:
-            hostname = self.ssh if self.ssh is not None \
-                else socket.gethostname()
-            path = os.path.join(hostname, 'db-dumps', 'MySQL', self.name)
-            if self.target is not None:
-                path = os.path.join(self.target, path)
-            if not os.path.exists(path):
-                os.makedirs(path)
+        path = os.path.join(path, f'{self.name}_{timestamp()}.sql.gz')
+        logging.debug(f'Storing {self.name} dump in {path}.')
 
-            path = os.path.join(path, f'{self.name}_{timestamp()}.sql.gz')
-            logging.debug(f'Storing {self.name} dump in {path}.')
-            with gzip.open(path, 'wt', encoding='utf8') as f:
-                f.write(stdout)
-        else:
+        pobj = self._run(args, env, path)
+        if pobj.returncode != 0:
+            err = pobj.stderr.read()
             logging.error(f'MySQL {self.name} dump failed.')
-            logging.error(stderr.strip())
+            logging.error(err.strip())
             print(f'MySQL {self.name} dump failed.', file=sys.stderr)
-            print(stderr.strip(), file=sys.stderr)
+            print(err.strip(), file=sys.stderr)
 
 
 class Script:
@@ -349,9 +348,6 @@ class Script:
             pass
         pobj.wait()
 
-        logging.info('')
-        logging.info('')
-        logging.info('')
         print('\n\n')
 
 
