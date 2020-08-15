@@ -305,8 +305,17 @@ class MySQL(Database):
 class Script:
     T = TypeVar('T', bound='Script')
 
-    def __init__(self, path: str):
+    def __init__(self, path: str, cwd: Optional[str] = None):
         self._path = path
+        self._cwd = cwd
+
+    @property
+    def cwd(self) -> Optional[str]:
+        return self._cwd
+
+    @cwd.setter
+    def cwd(self, value: Optional[str]):
+        self._cwd = value
 
     @property
     def path(self) -> str:
@@ -331,10 +340,10 @@ class Script:
 
         args = self.build_command_args()
         cmd = '" "'.join(args)
-        logging.debug(f'Running: "{cmd}"')
+        logging.debug(f'Running: "{cmd}" with cwd={cwd}')
 
         pobj = subprocess.Popen(args, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE)
+                                stderr=subprocess.PIPE, cwd=self.cwd)
 
         t_stdout = Thread(target=log, args=(pobj.stdout, logging.info,
                                             sys.stdout))
@@ -347,8 +356,6 @@ class Script:
         while t_stdout.is_alive() and t_stderr.is_alive():
             pass
         pobj.wait()
-
-        print('\n\n')
 
 
 class Source(Script):
@@ -631,8 +638,8 @@ def snapshot(sources: List[Source]):
         if not os.path.exists(snapshot_dir):
             os.makedirs(snapshot_dir)
         tar = Script(f'{"sudo " if as_root else ""}' +
-                     f'tar -czf "{snapshot_dir}/{timestamp()}.tar.gz" ' +
-                     f'"{os.path.join(base_dir, "files", "*")}"')
+                     f'tar -czf "{snapshot_dir}/{timestamp()}.tar.gz" ./*',
+                     cwd=os.path.join(base_dir, 'files'))
         tar.run()
 
 
