@@ -42,7 +42,7 @@ except ImportError as e:
 __author__ = 'J. Nathanael Philipp (jnphilipp)'
 __email__ = 'nathanael@philipp.land'
 __license__ = 'GPLv3'
-__version__ = '0.2.10'
+__version__ = '0.2.11'
 __github__ = 'https://github.com/jnphilipp/psync'
 
 
@@ -340,7 +340,7 @@ class Script:
 
         args = self.build_command_args()
         cmd = '" "'.join(args)
-        logging.debug(f'Running: "{cmd}" with cwd={cwd}')
+        logging.debug(f'Running: "{cmd}" with cwd={self.cwd}')
 
         pobj = subprocess.Popen(args, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, cwd=self.cwd)
