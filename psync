@@ -42,7 +42,7 @@ except ImportError as e:
 __author__ = 'J. Nathanael Philipp (jnphilipp)'
 __email__ = 'nathanael@philipp.land'
 __license__ = 'GPLv3'
-__version__ = '0.2.8'
+__version__ = '0.2.9'
 __github__ = 'https://github.com/jnphilipp/psync'
 
 
@@ -637,8 +637,8 @@ def snapshot(sources: List[Source]):
         snapshot_dir = os.path.join(base_dir, 'snapshots')
         if not os.path.exists(snapshot_dir):
             os.makedirs(snapshot_dir)
-        tar = Script(f'{"sudo " if as_root else ""}' +
-                     f'tar -czf "{snapshot_dir}/{timestamp()}.tar.gz" ./*',
+        tar = Script(f'{"sudo " if as_root else ""}tar -czf ' +
+                     f'"{snapshot_dir}/{timestamp()}.tar.gz" $(ls -A)',
                      cwd=os.path.join(base_dir, 'files'))
         tar.run()
 
@@ -670,7 +670,11 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--no-mysql', action='store_true',
                         dest='mysql', help='Disables MySQL dumps')
     parser.add_argument('-s', '--snapshot', action='store_true',
-                        dest='snapshot', help='Make a snapshot')
+                        dest='snapshot', help='Take a snapshot and store it ' +
+                        'in a tar.gz.')
+    parser.add_argument('-S', '--snapshot-only', action='store_true',
+                        dest='snapshot_only', help="Don't make a backup, " +
+                        "only take a snapshot.")
     parser.add_argument('-v', '--verbose', help='Verbose output.',
                         action='store_true')
     parser.add_argument('-f', '--log-format', help='Logging format.',
@@ -703,26 +707,27 @@ if __name__ == '__main__':
     else:
         parser.print_usage()
 
-    for k, v in sorted(pipeline.items(), key=lambda x: x[0]):
-        if args.notify:
-            send_notification(f'Starting with {v} step.')
+    if args.snapshot_only:
+        for k, v in sorted(pipeline.items(), key=lambda x: x[0]):
+            if args.notify:
+                send_notification(f'Starting with {v} step.')
 
-        if v == 'backup':
-            for source in sources:
-                if args.notify:
-                    send_notification(f'Starting backup of {source.path}')
-                source.backup()
-        elif v == 'postgresql-dbs' and not (args.postgres or args.database):
-            for pgsql in pgsqls:
-                pgsql.backup()
-        elif v == 'mysql-dbs' and not (args.mysql or args.database):
-            for mysql in mysqls:
-                mysql.backup()
-        elif v.startswith('script-'):
-            logging.info(f'Running script {scripts[int(v[7:])].path}.')
-            scripts[int(v[7:])].run()
+            if v == 'backup':
+                for source in sources:
+                    if args.notify:
+                        send_notification(f'Starting backup of {source.path}')
+                    source.backup()
+            elif v == 'postgresql-dbs' and not (args.postgres or args.database):
+                for pgsql in pgsqls:
+                    pgsql.backup()
+            elif v == 'mysql-dbs' and not (args.mysql or args.database):
+                for mysql in mysqls:
+                    mysql.backup()
+            elif v.startswith('script-'):
+                logging.info(f'Running script {scripts[int(v[7:])].path}.')
+                scripts[int(v[7:])].run()
 
-    if args.snapshot:
+    if args.snapshot or args.snapshot_only:
         if args.notify:
-            send_notification('Taking snapshot.')
+            send_notification('Taking a snapshot.')
         snapshot(sources)
