@@ -42,7 +42,7 @@ except ImportError as e:
 __author__ = 'J. Nathanael Philipp (jnphilipp)'
 __email__ = 'nathanael@philipp.land'
 __license__ = 'GPLv3'
-__version__ = '0.2.9'
+__version__ = '0.2.10'
 __github__ = 'https://github.com/jnphilipp/psync'
 
 
@@ -707,7 +707,7 @@ if __name__ == '__main__':
     else:
         parser.print_usage()
 
-    if args.snapshot_only:
+    if not args.snapshot_only:
         for k, v in sorted(pipeline.items(), key=lambda x: x[0]):
             if args.notify:
                 send_notification(f'Starting with {v} step.')
