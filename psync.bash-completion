@@ -6,7 +6,7 @@ _psync()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    opts="-h --help -t --target -x --xml --is-valid -d --no-database -p --no-postgres -m --no-mysql -s --snapshot -v --verbose -f --log-format -V --version"
+    opts="-h --help -t --target -x --xml --is-valid -d --no-database -p --no-postgres -m --no-mysql -s --snapshot -v --verbose -f --log-format -V --version -n --notify"
 
     case "${prev}" in
         -t|--target|-x|--xml)
