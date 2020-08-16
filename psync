@@ -42,7 +42,7 @@ except ImportError as e:
 __author__ = 'J. Nathanael Philipp (jnphilipp)'
 __email__ = 'nathanael@philipp.land'
 __license__ = 'GPLv3'
-__version__ = '0.2.11'
+__version__ = '0.2.12'
 __github__ = 'https://github.com/jnphilipp/psync'
 
 
@@ -637,9 +637,10 @@ def snapshot(sources: List[Source]):
         snapshot_dir = os.path.join(base_dir, 'snapshots')
         if not os.path.exists(snapshot_dir):
             os.makedirs(snapshot_dir)
+        files_dir = os.path.join(base_dir, 'files')
         tar = Script(f'{"sudo " if as_root else ""}tar -czf ' +
-                     f'"{snapshot_dir}/{timestamp()}.tar.gz" $(ls -A)',
-                     cwd=os.path.join(base_dir, 'files'))
+                     f'"{snapshot_dir}/{timestamp()}.tar.gz" ' +
+                     f'{" ".join(os.listdir(files_dir))}', cwd=files_dir)
         tar.run()
 
 
