@@ -703,14 +703,25 @@ if __name__ == '__main__':
             print(f'XML file {args.xml} is valid.')
             sys.exit(0)
         else:
-            pipeline, sources, mysqls, pgsqls, scripts = parse(args.xml,
-                                                               args.target)
+            pipeline, sources, mysqls, pgsqls, scripts = parse(args.xml, args.target)
     else:
         parser.print_usage()
 
     if not args.snapshot_only:
         for k, v in sorted(pipeline.items(), key=lambda x: x[0]):
-            if args.notify:
+            if (
+                (args.notify and v not in ['postgresql-dbs', 'mysqls'])
+                or (
+                    args.notify
+                    and v == 'postgresql-dbs'
+                    and not (args.postgres or args.database)
+                )
+                or (
+                    args.notify
+                    and v == 'mysql-dbs'
+                    and not (args.mysql or args.database)
+                )
+            ):
                 send_notification(f'Starting with {v} step.')
 
             if v == 'backup':
