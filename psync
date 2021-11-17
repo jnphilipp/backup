@@ -41,12 +41,21 @@ except ImportError:
     pass
 
 __author__ = "J. Nathanael Philipp (jnphilipp)"
+__copyright__ = "Copyright 2019-2021 J. Nathanael Philipp (jnphilipp)"
 __email__ = "nathanael@philipp.land"
 __license__ = "GPLv3"
 __version__ = "0.2.13"
 __github__ = "https://github.com/jnphilipp/psync"
 
 
+VERSION = (
+    f"%(prog)s v{__version__}\n{__copyright__}\n"
+    + "License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>."
+    + "\nThis is free software: you are free to change and redistribute it.\n"
+    + "There is NO WARRANTY, to the extent permitted by law.\n\n"
+    + f"Report bugs to {__github__}/issues."
+    + f"\nWritten by {__author__} <{__email__}>"
+)
 NAMESPACE = {"p": "http://jnphilipp.org/psync/"}
 
 
@@ -528,22 +537,7 @@ if __name__ == "__main__":
         "-V",
         "--version",
         action="version",
-        version=(
-            (
-                "###########################################\n"
-                + "#                  psync                  #\n"
-                + "#           python rsync wrapper          #\n"
-                + "#                                         #\n"
-                + f'#{center_text(f"v{__version__}")}#\n'
-                + f"#{center_text(__license__)}#\n"
-                + "#                                         #\n"
-                + f"#{center_text(__author__)}#\n"
-                + f"#{center_text(__email__)}#\n"
-                + "#                                         #\n"
-                + f"#{center_text(__github__)}#\n"
-                + "###########################################"
-            )
-        ),
+        version=VERSION,
     )
     parser.add_argument("-t", "--target", help="Backup target")
     parser.add_argument("-x", "--xml", dest="xml", help="XML config file")
