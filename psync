@@ -29,6 +29,7 @@ import sys
 import time
 
 from argparse import ArgumentParser, RawTextHelpFormatter
+from dataclasses import dataclass, field
 from lxml import etree
 from math import ceil, floor
 from threading import Thread
@@ -49,96 +50,23 @@ __github__ = "https://github.com/jnphilipp/psync"
 NAMESPACE = {"p": "http://jnphilipp.org/psync/"}
 
 
+@dataclass
 class Database:
-    T = TypeVar("T", bound="Database")
+    T = TypeVar("T", bound="Database", covariant=True)
 
-    def __init__(
-        self,
-        name: str,
-        user: str,
-        password: Optional[str] = None,
-        passwordstore: Optional[str] = None,
-        options: Optional[str] = None,
-        ssh: Optional[str] = None,
-        target: Optional[str] = None,
-    ):
-        self._name = name
-        self._user = user
-        self._password = password
-        self._passwordstore = passwordstore
-        self._options = options
-        self._ssh = ssh
-        self._target = target
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @name.setter
-    def name(self, value: str):
-        self._name = value
-
-    @property
-    def user(self) -> str:
-        return self._user
-
-    @user.setter
-    def user(self, value: str):
-        self._user = value
-
-    @property
-    def password(self) -> Optional[str]:
-        return self._password
-
-    @password.setter
-    def password(self, value: Optional[str]):
-        self._password = value
-
-    @property
-    def passwordstore(self) -> Optional[str]:
-        return self._passwordstore
-
-    @passwordstore.setter
-    def passwordstore(self, value: Optional[str]):
-        self._passwordstore = value
-
-    @property
-    def options(self) -> Optional[str]:
-        return self._options
-
-    @options.setter
-    def options(self, value: Optional[str]):
-        self._options = value
-
-    @property
-    def ssh(self) -> Optional[str]:
-        return self._ssh
-
-    @ssh.setter
-    def ssh(self, value: Optional[str]):
-        self._ssh = value
-
-    @property
-    def ssh(self) -> Optional[str]:
-        return self._ssh
-
-    @ssh.setter
-    def ssh(self, value: Optional[str]):
-        self._ssh = value
-
-    @property
-    def target(self) -> Optional[str]:
-        return self._target
-
-    @target.setter
-    def target(self, value: Optional[str]):
-        self._target = value
+    name: str
+    user: str
+    password: Optional[str] = None
+    passwordstore: Optional[str] = None
+    options: Optional[str] = None
+    ssh: Optional[str] = None
+    target: Optional[str] = None
 
     @classmethod
     def from_xml(cls: Type[T], e: etree.Element, default_target: Optional[str]) -> T:
         db = cls(
-            e.find("p:name", namespaces=NAMESPACE).text.strip(),
-            e.find("p:user", namespaces=NAMESPACE).text.strip(),
+            name=e.find("p:name", namespaces=NAMESPACE).text.strip(),
+            user=e.find("p:user", namespaces=NAMESPACE).text.strip(),
         )
 
         if e.find("p:password", namespaces=NAMESPACE) is not None:
@@ -185,21 +113,8 @@ class Database:
         pass
 
 
+@dataclass
 class PostgreSQL(Database):
-    def __init__(
-        self,
-        name: str,
-        user: str,
-        password: Optional[str] = None,
-        passwordstore: Optional[str] = None,
-        options: Optional[str] = None,
-        ssh: Optional[str] = None,
-        target: Optional[str] = None,
-    ):
-        super(PostgreSQL, self).__init__(
-            name, user, password, passwordstore, options, ssh, target
-        )
-
     def build_command_args(self) -> List[str]:
         if self.passwordstore is not None and self.ssh is not None:
             password = self._pass()
@@ -256,21 +171,8 @@ class PostgreSQL(Database):
             print(err.strip(), file=sys.stderr)
 
 
+@dataclass
 class MySQL(Database):
-    def __init__(
-        self,
-        name: str,
-        user: str,
-        password: Optional[str] = None,
-        passwordstore: Optional[str] = None,
-        options: Optional[str] = None,
-        ssh: Optional[str] = None,
-        target: Optional[str] = None,
-    ):
-        super(MySQL, self).__init__(
-            name, user, password, passwordstore, options, ssh, target
-        )
-
     def build_command_args(self) -> List[str]:
         if self.passwordstore is not None and self.ssh is not None:
             password = self._pass()
@@ -327,28 +229,16 @@ class MySQL(Database):
             print(err.strip(), file=sys.stderr)
 
 
+@dataclass
 class Script:
     T = TypeVar("T", bound="Script")
+
+    path: str
+    cwd: Optional[str] = None
 
     def __init__(self, path: str, cwd: Optional[str] = None):
         self._path = path
         self._cwd = cwd
-
-    @property
-    def cwd(self) -> Optional[str]:
-        return self._cwd
-
-    @cwd.setter
-    def cwd(self, value: Optional[str]):
-        self._cwd = value
-
-    @property
-    def path(self) -> str:
-        return self._path
-
-    @path.setter
-    def path(self, value: str):
-        self._path = value
 
     def build_command_args(self) -> List[str]:
         return shlex.split(self.path)
@@ -382,26 +272,16 @@ class Script:
         pobj.wait()
 
 
+@dataclass
 class Source(Script):
     T = TypeVar("T", bound="Source")
 
-    def __init__(
-        self,
-        path: str,
-        target: str,
-        excludes: Set[str] = set(),
-        as_root: bool = False,
-        rsync_config: Optional[str] = None,
-        pre_script: Optional[Script] = None,
-        post_script: Optional[Script] = None,
-    ):
-        super(Source, self).__init__(path)
-        self._target = target
-        self._excludes = excludes
-        self._as_root = as_root
-        self._rsync_config = rsync_config
-        self._pre_script = pre_script
-        self._post_script = post_script
+    as_root: bool = False
+    target: Optional[str] = None
+    excludes: Set[str] = field(default_factory=set)
+    rsync_config: Optional[str] = None
+    pre_script: Optional[Script] = None
+    post_script: Optional[Script] = None
 
     @property
     def hostname(self):
@@ -410,54 +290,6 @@ class Source(Script):
             return match.group(0)[:-1]
         else:
             return socket.gethostname()
-
-    @property
-    def target(self) -> str:
-        return self._target
-
-    @target.setter
-    def target(self, value: str):
-        self._target = value
-
-    @property
-    def excludes(self) -> Set[str]:
-        return self._excludes
-
-    @excludes.setter
-    def excludes(self, value: Set[str]):
-        self._excludes = value
-
-    @property
-    def as_root(self) -> bool:
-        return self._as_root
-
-    @as_root.setter
-    def as_root(self, value: bool):
-        self._as_root = value
-
-    @property
-    def rsync_config(self) -> Optional[str]:
-        return self._rsync_config
-
-    @rsync_config.setter
-    def rsync_config(self, value: Optional[str]):
-        self._rsync_config = value
-
-    @property
-    def pre_script(self) -> Optional[Script]:
-        return self._pre_script
-
-    @pre_script.setter
-    def pre_script(self, value: Optional[Script]):
-        self._pre_script = value
-
-    @property
-    def post_script(self) -> Optional[Script]:
-        return self._post_script
-
-    @post_script.setter
-    def post_script(self, value: Optional[Script]):
-        self._post_script = value
 
     @classmethod
     def from_xml(
@@ -469,9 +301,9 @@ class Source(Script):
     ) -> T:
         path = e.find("p:path", namespaces=NAMESPACE).text.strip()
         if e.find("p:target", namespaces=NAMESPACE) is not None:
-            source = cls(path, e.find("p:target", namespaces=NAMESPACE).text.strip())
+            source = cls(path=path, target=e.find("p:target", namespaces=NAMESPACE).text.strip())
         elif default_target is not None:
-            source = cls(path, default_target)
+            source = cls(path=path, target=default_target)
         else:
             print(f"No target for source {path}.", file=sys.stderr)
             sys.exit(1)
