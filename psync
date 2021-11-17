@@ -480,43 +480,35 @@ def timestamp() -> str:
     return time.strftime("%Y%m%dT%H%M%S%z", time.localtime())
 
 
-def load(path: str) -> etree.ElementTree:
-    """Load and parse XML.
+def load(
+    path: str, schema_path: str = "/usr/share/psync/psync.xsd"
+) -> Optional[etree.ElementTree]:
+    """Load XML and check validity.
 
     Args:
      * path: path to XML file
 
     Returns:
-     * parse XML as etree.ElementTree
+     * XML as etree.ElementTree if valid otherwise None
     """
     if not os.path.exists(path):
         print(f'XML file "{path}" not found.', file=sys.stderr)
         sys.exit(1)
-    logging.debug(f'Parsing XML file "{path}".')
-    return etree.parse(path)
+    logging.debug(f'Loading XML file "{path}".')
+    doc = etree.parse(path)
 
-
-def is_valid(path: str, schema_path: str = "/usr/share/psync/psync.xsd") -> bool:
-    """Check validity of a XML file.
-
-    Args:
-     * path: path to XML file
-     * schema_path: path to XML schema file
-
-    Returns:
-     * True if valid XML, False otherwise
-    """
     logging.debug(f'Loading XML schema "{schema_path}".')
     xmlschema = etree.XMLSchema(etree.parse(schema_path))
-    doc = load(path)
-    if not xmlschema.validate(doc):
-        logging.error("Not valid XML.")
-        print(f'XML file "{path}" is not valid.', file=sys.stderr)
-        xmlschema.assertValid(doc)
-    else:
-        logging.debug("Valid XML.")
 
-    return xmlschema.validate(doc)
+    if not xmlschema.validate(doc):
+        logging.error(f"XML file {path} is not valid.")
+        logging.error(xmlschema.error_log.last_error)
+        print(f'XML file "{path}" is not valid.', file=sys.stderr)
+        print(xmlschema.error_log.last_error)
+        return None
+    else:
+        logging.debug(f"XML file {path} is valid.")
+        return doc
 
 
 def parse(
@@ -533,9 +525,9 @@ def parse(
      * path: path to XML file to parse
      * target: optional target to use as default target
     """
-    if not is_valid(path):
-        sys.exit(1)
     doc = load(path)
+    if doc is None:
+        sys.exit(1)
 
     if (
         rsync_config is None
@@ -723,7 +715,7 @@ if __name__ == "__main__":
     pipeline: Dict[int, str] = {}
     if args.xml is not None:
         if args.check_valid:
-            if is_valid(args.xml):
+            if load(args.xml) is not None:
                 print(f"XML file {args.xml} is valid.")
             sys.exit(0)
         else:
