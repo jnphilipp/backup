@@ -31,7 +31,6 @@ import time
 from argparse import ArgumentParser, RawTextHelpFormatter
 from dataclasses import dataclass, field
 from lxml import etree
-from math import ceil, floor
 from threading import Thread
 from typing import Dict, List, Optional, Set, Tuple, Type, TypeVar
 
@@ -61,6 +60,8 @@ NAMESPACE = {"p": "http://jnphilipp.org/psync/"}
 
 @dataclass
 class Database:
+    """Dataclass for databases."""
+
     T = TypeVar("T", bound="Database", covariant=True)
 
     name: str
@@ -73,6 +74,15 @@ class Database:
 
     @classmethod
     def from_xml(cls: Type[T], e: etree.Element, default_target: Optional[str]) -> T:
+        """Create database from xml.
+
+        Args:
+         * e: XML Element
+         * default_target: default if not otherwise specified.
+
+        Returns:
+         * Instance of database.
+        """
         db = cls(
             name=e.find("p:name", namespaces=NAMESPACE).text.strip(),
             user=e.find("p:user", namespaces=NAMESPACE).text.strip(),
@@ -101,7 +111,9 @@ class Database:
         pobj = subprocess.Popen(["pass", self.passwordstore], stdout=subprocess.PIPE)
         return pobj.communicate()[0].decode("utf-8").split("\n")[0]
 
-    def _run(self, args: List[str], env: Dict[str, str], target: str):
+    def _run(
+        self, args: List[str], env: Dict[str, str], target: str
+    ) -> subprocess.Popen:
         with gzip.open(target, "wt", encoding="utf8") as f:
             pobj = subprocess.Popen(
                 args,
@@ -110,21 +122,30 @@ class Database:
                 stderr=subprocess.PIPE,
                 encoding="utf8",
             )
+
+            assert pobj.stdout is not None
+
             for line in pobj.stdout:
                 f.write(line)
+
             pobj.wait()
             return pobj
 
-    def cmd(self) -> List[str]:
-        pass
+    def build_command_args(self) -> List[str]:
+        """Build cmd command arguments."""
+        raise NotImplementedError()
 
     def backup(self):
-        pass
+        """Make backup."""
+        raise NotImplementedError()
 
 
 @dataclass
 class PostgreSQL(Database):
+    """Dataclass for PostgreSQL databases."""
+
     def build_command_args(self) -> List[str]:
+        """Build cmd command arguments."""
         if self.passwordstore is not None and self.ssh is not None:
             password = self._pass()
         elif self.password is not None and self.ssh is not None:
@@ -146,6 +167,7 @@ class PostgreSQL(Database):
         return args
 
     def backup(self):
+        """Make backup."""
         if self.passwordstore is not None and self.ssh is None:
             env = {"PGPASSWORD": self._pass()}
         elif self.password is not None and self.ssh is None:
@@ -182,7 +204,10 @@ class PostgreSQL(Database):
 
 @dataclass
 class MySQL(Database):
+    """Dataclass for MySQL databases."""
+
     def build_command_args(self) -> List[str]:
+        """Build cmd command arguments."""
         if self.passwordstore is not None and self.ssh is not None:
             password = self._pass()
         elif self.password is not None and self.ssh is not None:
@@ -204,6 +229,7 @@ class MySQL(Database):
         return args
 
     def backup(self):
+        """Make backup."""
         if self.passwordstore is not None and self.ssh is None:
             env = {"MYSQL_PWD": self._pass()}
         elif self.password is not None and self.ssh is None:
@@ -240,19 +266,20 @@ class MySQL(Database):
 
 @dataclass
 class Script:
+    """Dataclass for scripts."""
+
     T = TypeVar("T", bound="Script")
 
     path: str
-    cwd: Optional[str] = None
-
-    def __init__(self, path: str, cwd: Optional[str] = None):
-        self._path = path
-        self._cwd = cwd
+    cwd: Optional[str]
 
     def build_command_args(self) -> List[str]:
+        """Build cmd command arguments."""
         return shlex.split(self.path)
 
     def run(self):
+        """Run."""
+
         def log(stream, logger, writer):
             while True:
                 line = stream.readline().decode()
@@ -283,17 +310,24 @@ class Script:
 
 @dataclass
 class Source(Script):
+    """Dataclass for sources."""
+
     T = TypeVar("T", bound="Source")
 
+    target: str
     as_root: bool = False
-    target: Optional[str] = None
     excludes: Set[str] = field(default_factory=set)
     rsync_config: Optional[str] = None
     pre_script: Optional[Script] = None
     post_script: Optional[Script] = None
 
     @property
-    def hostname(self):
+    def hostname(self) -> str:
+        """Get the hostnome either from self.path or from socket.gethostname.
+
+        Returns:
+         * hostname
+        """
         match = re.match(r"^([^/]+@)?[^/]+:", self.path)
         if match:
             return match.group(0)[:-1]
@@ -308,11 +342,26 @@ class Source(Script):
         default_rsync_config: Optional[str],
         default_as_root: bool,
     ) -> T:
+        """Create Source from xml.
+
+        Args:
+         * e: XML Element
+         * default_target: default if not otherwise specified.
+         * default_rsync_config: default rsync config if not otherwise specified.
+         * default_as_root: default as root if not otherwise specified.
+
+        Returns:
+         * Instance of source.
+        """
         path = e.find("p:path", namespaces=NAMESPACE).text.strip()
         if e.find("p:target", namespaces=NAMESPACE) is not None:
-            source = cls(path=path, target=e.find("p:target", namespaces=NAMESPACE).text.strip())
+            source = cls(
+                path=path,
+                cwd=None,
+                target=e.find("p:target", namespaces=NAMESPACE).text.strip(),
+            )
         elif default_target is not None:
-            source = cls(path=path, target=default_target)
+            source = cls(path=path, cwd=None, target=default_target)
         else:
             print(f"No target for source {path}.", file=sys.stderr)
             sys.exit(1)
@@ -334,15 +383,16 @@ class Source(Script):
 
         if e.find("p:pre_script", namespaces=NAMESPACE) is not None:
             path = e.find("p:pre_script", namespaces=NAMESPACE).text.strip()
-            source.pre_script = Script(path)
+            source.pre_script = Script(path=path, cwd=None)
 
         if e.find("p:post_script", namespaces=NAMESPACE) is not None:
             path = e.find("p:post_script", namespaces=NAMESPACE).text.strip()
-            source.post_script = Script(path)
+            source.post_script = Script(path=path, cwd=None)
 
         return source
 
     def build_command_args(self) -> List[str]:
+        """Build cmd command arguments."""
         match = re.match(r"^([^/]+@)?[^/]+:", self.path)
         if match:
             print(f"Remote source {self.path}.")
@@ -380,6 +430,7 @@ class Source(Script):
         return cmd + [self.path, target]
 
     def backup(self):
+        """Make backup."""
         if self.pre_script is not None:
             logging.info(f"Run pre-script {self.pre_script.path}.")
             self.pre_script.run()
@@ -389,14 +440,16 @@ class Source(Script):
             self.post_script.run()
 
 
-def center_text(text: str, width: int = 41) -> str:
-    return (
-        f'{" " * floor((width - len(text)) / 2)}{text}'
-        + f'{" " * ceil((width - len(text)) / 2)}'
-    )
-
-
 def to_bool(string: str, default: bool = False) -> bool:
+    """Convert string to bool.
+
+    Args:
+     * string: string to convert
+     * default: default boolean if no match
+
+    Returns:
+     * boolean value
+    """
     if string == "1" or string == "yes" or string == "true" or string == "on":
         return True
     elif string == "0" or string == "no" or string == "false" or string == "off":
@@ -405,7 +458,12 @@ def to_bool(string: str, default: bool = False) -> bool:
         return default
 
 
-def send_notification(msg):
+def send_notification(msg: str):
+    """Send a notification with notify2.
+
+    Args:
+     * msg: message of the notification
+    """
     try:
         n = notify2.Notification("psync", msg, "psync")
         n.show()
@@ -414,10 +472,23 @@ def send_notification(msg):
 
 
 def timestamp() -> str:
+    """Get current timestamp as string.
+
+    Returns:
+     * current timestamp in the format of "%Y%m%dT%H%M%S%z"
+    """
     return time.strftime("%Y%m%dT%H%M%S%z", time.localtime())
 
 
 def load(path: str) -> etree.ElementTree:
+    """Load and parse XML.
+
+    Args:
+     * path: path to XML file
+
+    Returns:
+     * parse XML as etree.ElementTree
+    """
     if not os.path.exists(path):
         print(f'XML file "{path}" not found.', file=sys.stderr)
         sys.exit(1)
@@ -425,38 +496,54 @@ def load(path: str) -> etree.ElementTree:
     return etree.parse(path)
 
 
-def check_valid(
-    path: str, doc: etree.ElementTree, schema_path: str = "/usr/share/psync/psync.xsd"
-):
+def is_valid(path: str, schema_path: str = "/usr/share/psync/psync.xsd") -> bool:
+    """Check validity of a XML file.
+
+    Args:
+     * path: path to XML file
+     * schema_path: path to XML schema file
+
+    Returns:
+     * True if valid XML, False otherwise
+    """
     logging.debug(f'Loading XML schema "{schema_path}".')
     xmlschema = etree.XMLSchema(etree.parse(schema_path))
+    doc = load(path)
     if not xmlschema.validate(doc):
         logging.error("Not valid XML.")
-        print(f'XML file "{path}" not valid.', file=sys.stderr)
+        print(f'XML file "{path}" is not valid.', file=sys.stderr)
         xmlschema.assertValid(doc)
-        sys.exit(1)
     else:
         logging.debug("Valid XML.")
 
+    return xmlschema.validate(doc)
+
 
 def parse(
-    path: str, target: Optional[str] = None, **kwargs
+    path: str,
+    target: Optional[str] = None,
+    as_root: Optional[bool] = None,
+    rsync_config: Optional[str] = None,
 ) -> Tuple[
     Dict[int, str], List[Source], List[MySQL], List[PostgreSQL], Dict[int, Script]
 ]:
-    doc = load(path)
-    check_valid(path, doc)
+    """Parse XML file.
 
-    as_root = kwargs["as_root"] if "as_root" in kwargs else False
-    rsync_config = kwargs["rsync_config"] if "rsync_config" in kwargs else None
+    Args:
+     * path: path to XML file to parse
+     * target: optional target to use as default target
+    """
+    if not is_valid(path):
+        sys.exit(1)
+    doc = load(path)
 
     if (
-        "rsync_config" not in kwargs
+        rsync_config is None
         and doc.find("p:options/p:rsync", namespaces=NAMESPACE) is not None
     ):
         e = doc.find("p:options/p:rsync", namespaces=NAMESPACE)
         rsync_config = e.text.strip()
-        if "as_root" not in kwargs and "root" in e.attrib:
+        if as_root is None and "root" in e.attrib:
             as_root = to_bool(e.attrib["root"].strip(), False)
 
     if (
@@ -475,11 +562,15 @@ def parse(
 
     scripts: Dict[int, Script] = {}
     for e in doc.xpath("p:scripts/p:script", namespaces=NAMESPACE):
-        scripts[int(e.attrib["id"].strip())] = Script(e.text.strip())
+        scripts[int(e.attrib["id"].strip())] = Script(path=e.text.strip(), cwd=None)
 
     sources: List[Source] = []
     for e in doc.xpath("p:sources/p:source", namespaces=NAMESPACE):
-        sources.append(Source.from_xml(e, target, rsync_config, as_root))
+        sources.append(
+            Source.from_xml(
+                e, target, rsync_config, False if as_root is None else as_root
+            )
+        )
 
     pipeline: Dict[int, str] = {}
     for step in doc.xpath("p:pipeline/*", namespaces=NAMESPACE):
@@ -506,6 +597,11 @@ def parse(
 
 
 def snapshot(sources: List[Source]):
+    """Make a snapshot of a list of Sources and stores it in a tar.gz.
+
+    Args:
+     * sources: list of sources to include in the snapshot
+    """
     base_dirs: Dict[str, bool] = {}
     for source in sources:
         base_dir = os.path.join(source.target, source.hostname)
@@ -582,7 +678,9 @@ if __name__ == "__main__":
         dest="snapshot_only",
         help="Don't make a backup, " + "only take a snapshot.",
     )
-    parser.add_argument("-v", "--verbose", help="Verbose output.", action="count", default=0)
+    parser.add_argument(
+        "-v", "--verbose", help="Verbose output.", action="count", default=0
+    )
     parser.add_argument(
         "-f",
         "--log-format",
@@ -625,8 +723,8 @@ if __name__ == "__main__":
     pipeline: Dict[int, str] = {}
     if args.xml is not None:
         if args.check_valid:
-            check_valid(args.xml, load(args.xml))
-            print(f"XML file {args.xml} is valid.")
+            if is_valid(args.xml):
+                print(f"XML file {args.xml} is valid.")
             sys.exit(0)
         else:
             pipeline, sources, mysqls, pgsqls, scripts = parse(args.xml, args.target)
