@@ -43,7 +43,7 @@ __author__ = "J. Nathanael Philipp (jnphilipp)"
 __copyright__ = "Copyright 2019-2021 J. Nathanael Philipp (jnphilipp)"
 __email__ = "nathanael@philipp.land"
 __license__ = "GPLv3"
-__version__ = "0.2.13"
+__version__ = "0.3.0"
 __github__ = "https://github.com/jnphilipp/psync"
 
 
