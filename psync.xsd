@@ -84,11 +84,12 @@
     </xs:complexType>
 
     <xs:complexType name="scriptType">
-        <xs:simpleContent>
-            <xs:extension base="xs:string">
-                <xs:attribute name="id" type="xs:integer" use="required"/>
-            </xs:extension>
-        </xs:simpleContent>
+        <xs:sequence>
+            <xs:element name="command" type="xs:string"/>
+            <xs:element name="args" type="xs:string" minOccurs="0"/>
+        </xs:sequence>
+        <xs:attribute name="id" type="xs:integer" use="required"/>
+        <xs:attribute name="root" type="p:BooleanType" use="optional"/>
     </xs:complexType>
 
     <xs:complexType name="sourcesType">
@@ -100,13 +101,21 @@
 
     <xs:complexType name="sourceType">
         <xs:sequence>
-            <xs:element name="path" type="xs:string"/>
+            <xs:element name="path" type="p:pathType"/>
             <xs:element name="exclude" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
             <xs:element name="target" type="xs:string" minOccurs="0"/>
             <xs:element name="rsync" type="p:rootStrType" minOccurs="0"/>
-            <xs:element name="pre_script" type="xs:string" minOccurs="0"/>
-            <xs:element name="post_script" type="xs:string" minOccurs="0"/>
+            <xs:element name="pre_script" type="xs:integer" minOccurs="0"/>
+            <xs:element name="post_script" type="xs:integer" minOccurs="0"/>
         </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="pathType">
+        <xs:simpleContent>
+            <xs:extension base="xs:string">
+                <xs:attribute name="host" type="xs:string" use="optional"/>
+            </xs:extension>
+        </xs:simpleContent>
     </xs:complexType>
 
     <xs:complexType name="databasesType">
