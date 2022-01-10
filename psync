@@ -187,7 +187,7 @@ class PostgreSQL(Database):
         if self.target is not None:
             path = self.target / path
         path = path.absolute()
-        if path.exists():
+        if not path.exists():
             path.mkdir(parents=True, exist_ok=True)
 
         path /= f"{self.name}_{timestamp()}.sql.gz"
@@ -247,7 +247,7 @@ class MySQL(Database):
         if self.target is not None:
             path = self.target / path
         path = path.absolute()
-        if path.exists():
+        if not path.exists():
             path.mkdir(parents=True, exist_ok=True)
 
         path /= f"{self.name}_{timestamp()}.sql.gz"
