@@ -1,4 +1,4 @@
-_file=
+_file="-o filenames"
 _psync()
 {
     local cur prev opts base subcommand
@@ -6,21 +6,12 @@ _psync()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    opts="-h --help -t --target -x --xml --is-valid -d --no-database -p --no-postgres -m --no-mysql -s --snapshot -S --snapshot-only -v --verbose -f --log-format -V --version -n --notify"
+    opts="-h --help --is-valid -d --no-database -p --no-postgres -m --no-mysql -s --snapshot -S --snapshot-only -v --verbose -f --log-format -V --version -n --notify"
+    opts=$(compgen -W "${opts}" -- ${cur})
 
-    case "${prev}" in
-        -t|--target|-x|--xml)
-            OLDIFS=$IFS
-            IFS=$'\n'
-            COMPREPLY=( $(compgen -f -- ${cur}) )
-            IFS=$OLDIFS
-            _file="-o filenames"
-            return 0
-            ;;
-        *)
-            COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
-            return 0
-            ;;
-    esac
+    OLDIFS=$IFS
+    IFS=$'\n'
+    COMPREPLY=( ${opts[@]} $(compgen -f -- ${cur}) )
+    IFS=$OLDIFS
 }
 complete -d ${_file} -F _psync psync
