@@ -55,7 +55,9 @@ VERSION = (
     + f"Report bugs to {__github__}/issues."
     + f"\nWritten by {__author__} <{__email__}>"
 )
-NAMESPACE = {"p": "http://jnphilipp.org/backup/"}
+NAMESPACE = {
+    "p": "https://raw.githubusercontent.com/jnphilipp/backup/master/backup.xsd"
+}
 
 
 @dataclass

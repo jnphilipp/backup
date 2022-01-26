@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<backup xmlns="http://jnphilipp.org/backup/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jnphilipp.org/backup/ http://jnphilipp.org/backup/backup.xsd">
+<backup xmlns="https://github.com/jnphilipp/backup/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://github.com/jnphilipp/backup/ https://raw.githubusercontent.com/jnphilipp/backup/master/backup.xsdbackup.xsd">
     <options>
         <rsync root="yes">--delete --delete-excluded --stats --backup-dir=%s -abuchPpzz</rsync>
     </options>

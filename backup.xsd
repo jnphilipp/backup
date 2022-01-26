@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<xs:schema targetNamespace="http://jnphilipp.org/backup/" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:p="http://jnphilipp.org/backup/" elementFormDefault="qualified" attributeFormDefault="unqualified">
+<xs:schema targetNamespace="https://github.com/jnphilipp/backup/" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:p="https://github.com/jnphilipp/backup/" elementFormDefault="qualified" attributeFormDefault="unqualified">
     <xs:element name="backup" type="p:backupType">
         <xs:unique name="UniqueOptionName">
             <xs:selector xpath=".//option"/>
