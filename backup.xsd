@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
-<xs:schema targetNamespace="http://jnphilipp.org/psync/" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:p="http://jnphilipp.org/psync/" elementFormDefault="qualified" attributeFormDefault="unqualified">
-    <xs:element name="psync" type="p:psyncType">
+<xs:schema targetNamespace="http://jnphilipp.org/backup/" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:p="http://jnphilipp.org/backup/" elementFormDefault="qualified" attributeFormDefault="unqualified">
+    <xs:element name="backup" type="p:backupType">
         <xs:unique name="UniqueOptionName">
             <xs:selector xpath=".//option"/>
             <xs:field xpath="@name"/>
@@ -19,7 +19,7 @@
         </xs:unique>
     </xs:element>
 
-    <xs:complexType name="psyncType">
+    <xs:complexType name="backupType">
         <xs:sequence>
             <xs:element name="options" type="p:optionsType" minOccurs="0"/>
             <xs:element name="scripts" type="p:scriptsType" minOccurs="0"/>

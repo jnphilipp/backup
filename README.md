@@ -1,4 +1,4 @@
-# psync
+# backup
 
 Python wrapper for rsync for easy configuration.
 
@@ -24,7 +24,7 @@ $ make deb
 
 ### Usage
 
-For options see `$ psync -h`. An example XML configuration is in `test.xml`.
+For options see `$ backup -h`. An example XML configuration is in `test.xml`.
 
 #### Icon
 

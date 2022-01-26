@@ -44,7 +44,7 @@ __copyright__ = "Copyright 2019-2022 J. Nathanael Philipp (jnphilipp)"
 __email__ = "nathanael@philipp.land"
 __license__ = "GPLv3"
 __version__ = "0.3.1"
-__github__ = "https://github.com/jnphilipp/psync"
+__github__ = "https://github.com/jnphilipp/backup"
 
 
 VERSION = (
@@ -55,7 +55,7 @@ VERSION = (
     + f"Report bugs to {__github__}/issues."
     + f"\nWritten by {__author__} <{__email__}>"
 )
-NAMESPACE = {"p": "http://jnphilipp.org/psync/"}
+NAMESPACE = {"p": "http://jnphilipp.org/backup/"}
 
 
 @dataclass
@@ -526,7 +526,7 @@ def send_notification(msg: str):
      * msg: message of the notification
     """
     try:
-        n = notify2.Notification("psync", msg, "psync")
+        n = notify2.Notification("backup", msg, "backup")
         n.show()
     except NameError:
         pass
@@ -542,7 +542,7 @@ def timestamp() -> str:
 
 
 def load(
-    path: Union[Path, TextIO], schema_path: str = "/usr/share/psync/psync.xsd"
+    path: Union[Path, TextIO], schema_path: str = "/usr/share/backup/backup.xsd"
 ) -> Optional[etree.ElementTree]:
     """Load XML and check validity.
 
@@ -555,7 +555,7 @@ def load(
     logging.debug(
         f'Loading XML file "{path if isinstance(path, Path) else path.name}".'
     )
-    doc = etree.parse(path)
+    doc = etree.parse(str(path.absolute()) if isinstance(path, Path) else path)
 
     logging.debug(f'Loading XML schema "{schema_path}".')
     xmlschema = etree.XMLSchema(etree.parse(schema_path))
@@ -635,14 +635,14 @@ def parse(
         pipeline[int(step.attrib["no"].strip())] = step.text.strip()
 
     for e in doc.xpath("p:databases/p:file", namespaces=NAMESPACE):
-        values = parse(e.text.strip(), target)
+        values = parse(Path(e.text.strip()), target)
         sources += values[1]
         mysqls += values[2]
         pgsqls += values[3]
 
     for e in doc.xpath("p:sources/p:file", namespaces=NAMESPACE):
         values = parse(
-            e.text.strip(),
+            Path(e.text.strip()),
             target,
             rsync_config=rsync_config,
             as_root=to_bool(e.attrib["root"], False) if "root" in e.attrib else as_root,
@@ -690,7 +690,7 @@ def snapshot(sources: List[Source]):
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(prog="psync", formatter_class=RawTextHelpFormatter)
+    parser = ArgumentParser(prog="backup", formatter_class=RawTextHelpFormatter)
     parser.add_argument(
         "-V",
         "--version",
@@ -783,14 +783,14 @@ if __name__ == "__main__":
             format=args.log_format,
             level=level,
             handlers=[
-                logging.FileHandler(f"psync-{timestamp()}.log"),
+                logging.FileHandler(f"backup-{timestamp()}.log"),
                 logging.StreamHandler(sys.stdout),
             ],
         )
 
     if args.notify:
         try:
-            notify2.init("psync")
+            notify2.init("backup")
         except NameError:
             args.notify = False
 

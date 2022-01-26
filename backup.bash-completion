@@ -1,5 +1,5 @@
 _file="-o filenames"
-_psync()
+_backup()
 {
     local cur prev opts base subcommand
     COMPREPLY=()
@@ -14,4 +14,4 @@ _psync()
     COMPREPLY=( ${opts[@]} $(compgen -f -- ${cur}) )
     IFS=$OLDIFS
 }
-complete -d ${_file} -F _psync psync
+complete -d ${_file} -F _backup backup

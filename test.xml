@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<psync xmlns="http://jnphilipp.org/psync/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jnphilipp.org/psync/ http://jnphilipp.org/psync/psync.xsd">
+<backup xmlns="http://jnphilipp.org/backup/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jnphilipp.org/backup/ http://jnphilipp.org/backup/backup.xsd">
     <options>
         <rsync root="yes">--delete --delete-excluded --stats --backup-dir=%s -abuchPpzz</rsync>
     </options>
     <scripts>
-        <script id="1">/home/user/Documents/some_script.sh</script>
-        <script id="2">/home/user/Downloads/cloud/other_script.sh</script>
+        <script id="1"><command>/home/user/Documents/some_script.sh</command></script>
+        <script id="2"><command>/home/user/Downloads/cloud/other_script.sh</command></script>
     </scripts>
     <sources>
-        <file root="yes">/home/jnphilipp/.psync/root.xml</file>
+        <file root="yes">/home/jnphilipp/.backup/root.xml</file>
         <source>
             <path>/home</path>
             <exclude>.cache</exclude>
@@ -70,4 +70,4 @@
         <step no="4">script-2</step>
         <step no="5">backup</step>
     </pipeline>
-</psync>
+</backup>
