@@ -43,7 +43,7 @@ __author__ = "J. Nathanael Philipp (jnphilipp)"
 __copyright__ = "Copyright 2019-2022 J. Nathanael Philipp (jnphilipp)"
 __email__ = "nathanael@philipp.land"
 __license__ = "GPLv3"
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 __github__ = "https://github.com/jnphilipp/backup"
 
 
@@ -55,9 +55,7 @@ VERSION = (
     + f"Report bugs to {__github__}/issues."
     + f"\nWritten by {__author__} <{__email__}>"
 )
-NAMESPACE = {
-    "p": "https://raw.githubusercontent.com/jnphilipp/backup/master/backup.xsd"
-}
+NAMESPACE = {"p": "https://github.com/jnphilipp/backup/"}
 
 
 @dataclass
