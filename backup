@@ -465,8 +465,6 @@ class Source(Script):
 
         if not target.exists():
             target.mkdir(parents=True, exist_ok=True)
-        if not backup_dir.exists():
-            backup_dir.mkdir(parents=True, exist_ok=True)
 
         cmd = ["rsync"]
         if self.as_root:
