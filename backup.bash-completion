@@ -6,7 +6,7 @@ _backup()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    opts="-h --help --is-valid -d --no-database -p --no-postgres -m --no-mysql -s --snapshot -S --snapshot-only -v --verbose -f --log-format -V --version -n --notify"
+    opts="-h --help -V --version --is-valid -d --no-database -p --no-postgres -m --no-mysql -s --snapshot -S --snapshot-only -v --verbose -f --log-format -n --notify --dry-run"
     opts=$(compgen -W "${opts}" -- ${cur})
 
     OLDIFS=$IFS
