@@ -14,6 +14,9 @@ else
   Q := @
 endif
 
+test:
+	python -m unittest
+
 install: backup backup.xsd backup.bash-completion build/copyright build/changelog.Debian.gz build/backup.1.gz
 	$(Q)install -Dm 0755 backup "${DEST_DIR}/${BIN_DIR}"/backup
 	$(Q)install -Dm 0644 backup.xsd "${DEST_DIR}/${SHARE_DIR}"/backup/backup.xsd
