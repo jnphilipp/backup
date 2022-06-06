@@ -624,8 +624,8 @@ def parse(
     path: Union[Path, TextIO],
     target: Optional[Path] = None,
     as_root: Optional[bool] = None,
-    tool: Optional[Tool] = None,
-    config: Optional[List[str]] = None,
+    default_tool: Optional[Tool] = None,
+    default_config: Optional[List[str]] = None,
 ) -> Tuple[
     Dict[int, str], List[Source], List[MySQL], List[PostgreSQL], Dict[int, Script]
 ]:
@@ -635,18 +635,22 @@ def parse(
      * path: path to XML file to parse
      * target: optional target to use as default target
     """
-    assert (tool is None and config is None) or (
-        tool is not None and config is not None
+    assert (default_tool is None and default_config is None) or (
+        default_tool is not None and default_config is not None
     )
 
     doc = load(path)
     if doc is None:
         sys.exit(1)
 
-    if tool is None and config is None:
+    if default_tool is None and default_config is None:
         e = doc.find("p:tool", namespaces=NAMESPACE)
         tool = Tool(e.attrib["name"].strip())
         config = shlex.split(e.text.strip()) if e.text else []
+    if default_tool is not None:
+        tool = default_tool
+    if default_config is not None:
+        config = default_config
 
     if as_root is None and "root" in e.attrib:
         as_root = to_bool(e.attrib["root"].strip(), False)
@@ -674,7 +678,7 @@ def parse(
         sources.append(
             Source.from_xml(
                 e,
-                tool=(tool, config),
+                cmd=(tool, config),
                 default_as_root=False if as_root is None else as_root,
                 default_target=target,
                 scripts=scripts,
@@ -698,8 +702,8 @@ def parse(
             npath,
             target,
             as_root=to_bool(e.attrib["root"], False) if "root" in e.attrib else as_root,
-            tool=tool,
-            config=config,
+            default_tool=tool,
+            default_config=config,
         )
         sources += values[1]
         mysqls += values[2]
