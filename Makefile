@@ -40,9 +40,13 @@ uninstall:
 clean:
 	$(Q)rm -rf ./build
 
-deb: build/package/DEBIAN/control
+deb: test build/package/DEBIAN/control
 	$(Q)fakeroot dpkg-deb -b build/package build/backup.deb
 	$(Q)lintian -Ivi build/backup.deb
+	@echo "backup.deb completed."
+
+deb-sig: deb
+	$(Q)dpkg-sig -s builder build/backup.deb
 
 build:
 	$(Q)mkdir -p build
@@ -78,28 +82,36 @@ build/copyright.h2m: build
 	$(Q)echo "You should have received a copy of the GNU General Public License along with this program. If not, see http://www.gnu.org/licenses/." >> build/copyright.h2m
 
 build/changelog.Debian.gz: build
-	$(Q)declare TAGS=(`git tag`); for ((i=$${#TAGS[@]};i>=0;i--)); do if [ $$i -eq 0 ]; then git log $${TAGS[$$i]} --no-merges --format="backup ($${TAGS[$$i]}-%h) unstable; urgency=medium%n%n  * %s%n    %b%n -- %an <%ae>  %aD%n" | sed "/^\s*$$/d" >> build/changelog; elif [ $$i -eq $${#TAGS[@]} ]; then git log $${TAGS[$$i-1]}..HEAD --no-merges --format="backup ($${TAGS[$$i-1]}-%h) unstable; urgency=medium%n%n  * %s%n    %b%n -- %an <%ae>  %aD%n" | sed "/^\s*$$/d" >> build/changelog; else git log $${TAGS[$$i-1]}..$${TAGS[$$i]} --no-merges --format="backup ($${TAGS[$$i]}-%h) unstable; urgency=medium%n%n  * %s%n    %b%n -- %an <%ae>  %aD%n" | sed "/^\s*$$/d" >> build/changelog; fi; done
+	$(Q)( \
+		declare TAGS=(`git tag`); \
+		for ((i=$${#TAGS[@]};i>=0;i--)); do \
+			if [ $$i -eq 0 ]; then \
+				echo -e "bibliothek ($${TAGS[$$i]}) unstable; urgency=medium" >> build/changelog; \
+				git log $${TAGS[$$i]} --no-merges --format="  * %h %s"  >> build/changelog; \
+				git log $${TAGS[$$i]} -n 1 --format=" -- %an <%ae>  %aD" >> build/changelog; \
+			elif [ $$i -eq $${#TAGS[@]} ] && [ $$(git log $${TAGS[$$i-1]}..HEAD --oneline | wc -l) -ne 0 ]; then \
+				echo -e "bibliothek ($${TAGS[$$i-1]}-$$(git log -n 1 --format='%h')) unstable; urgency=medium" >> build/changelog; \
+				git log $${TAGS[$$i-1]}..HEAD --no-merges --format="  * %h %s"  >> build/changelog; \
+				git log HEAD -n 1 --format=" -- %an <%ae>  %aD" >> build/changelog; \
+			elif [ $$i -lt $${#TAGS[@]} ]; then \
+				echo -e "bibliothek ($${TAGS[$$i]}) unstable; urgency=medium" >> build/changelog; \
+				git log $${TAGS[$$i-1]}..$${TAGS[$$i]} --no-merges --format="  * %h %s"  >> build/changelog; \
+				git log $${TAGS[$$i]} -n 1 --format=" -- %an <%ae>  %aD" >> build/changelog; \
+			fi; \
+		done \
+	)
 	$(Q)cat build/changelog | gzip -n9 > build/changelog.Debian.gz
 
 build/backup.1.gz: build build/copyright.h2m
 	$(Q)help2man ./backup -i build/copyright.h2m -n "Python wrapper for rsync." | gzip -n9 > build/backup.1.gz
-
-build/package/DEBIAN: build
-	$(Q)mkdir -p build/package/DEBIAN
+	$(Q)LC_ALL=en_US.UTF-8 MANROFFSEQ='' MANWIDTH=80 man --warnings -E UTF-8 -l -Tutf8 -Z ./build/backup.1.gz > /dev/null
 
 build/package/DEBIAN/md5sums: backup backup.xsd backup.bash-completion backup.svg build/copyright build/changelog.Debian.gz build/backup.1.gz build/package/DEBIAN
-	$(Q)install -Dm 0755 backup build/package"${BIN_DIR}"/backup
-	$(Q)install -Dm 0644 backup.xsd build/package"${SHARE_DIR}"/backup/backup.xsd
-	$(Q)install -Dm 0644 backup.bash-completion build/package"${BASH_COMPLETION_DIR}"/backup.bash-completion
-	$(Q)install -Dm 0644 build/changelog.Debian.gz build/package"${DOC_DIR}"/backup/changelog.Debian.gz
-	$(Q)install -Dm 0644 build/copyright build/package"${DOC_DIR}"/backup/copyright
-	$(Q)install -Dm 0644 build/backup.1.gz build/package"${MAN_DIR}"/man1/backup.1.gz
-	$(Q)install -Dm 0644 backup.svg build/package"${ICON_DIR}"/hicolor/scalable/apps/backup.svg
-
+	$(Q)make install DEST_DIR=build/package
 	$(Q)mkdir -p build/package/DEBIAN
-	$(Q)md5sum `find build/package -type f -not -path "*DEBIAN*"` > build/md5sums
+	$(Q)find build/package -type f -not -path "*DEBIAN*" -exec md5sum {} \; > build/md5sums
 	$(Q)sed -e "s/build\/package\///" build/md5sums > build/package/DEBIAN/md5sums
-	$(Q)chmod 644 build/package/DEBIAN/md5sums
+	$(Q)chmod 0644 build/package/DEBIAN/md5sums
 
 build/package/DEBIAN/control: build/package/DEBIAN/md5sums
 	$(Q)echo "Package: backup" > build/package/DEBIAN/control
