@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<backup xmlns="https://github.com/jnphilipp/backup/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://github.com/jnphilipp/backup/ https://raw.githubusercontent.com/jnphilipp/backup/master/backup.xsd">
+    <sources>
+        <source>
+            <path>/run/media/DATA</path>
+            <exclude>/.Trash-1000</exclude>
+        </source>
+    </sources>
+</backup>

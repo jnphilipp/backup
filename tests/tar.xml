@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<backup xmlns="https://github.com/jnphilipp/backup/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://github.com/jnphilipp/backup/ https://raw.githubusercontent.com/jnphilipp/backup/master/backup.xsd">
+    <tool name="tar" root="yes">--create --gzip --listed-incremental=%s --verbose</tool>
+    <sources>
+        <file>data.xml</file>
+        <source><path>/boot</path></source>
+        <source><path>/etc</path></source>
+        <source>
+            <path>/root</path>
+            <exclude>**/.cache</exclude>
+            <exclude>**/.dbus</exclude>
+            <exclude>**/.gvfs</exclude>
+        </source>
+        <source>
+            <path>/var/</path>
+            <exclude>/crash</exclude>
+            <exclude>/tmp</exclude>
+            <exclude>/log</exclude>
+            <exclude>/spool</exclude>
+        </source>
+        <source>
+            <path>/srv/</path>
+            <exclude>**/venv</exclude>
+            <exclude>**/.venv</exclude>
+            <exclude>**/__pycache__</exclude>
+            <exclude>**/.mypy_cache</exclude>
+        </source>
+    </sources>
+    <pipeline>
+        <step no="1">backup</step>
+    </pipeline>
+</backup>

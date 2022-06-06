@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <xs:schema targetNamespace="https://github.com/jnphilipp/backup/" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:p="https://github.com/jnphilipp/backup/" elementFormDefault="qualified" attributeFormDefault="unqualified">
     <xs:element name="backup" type="p:backupType">
-        <xs:unique name="UniqueOptionName">
-            <xs:selector xpath=".//option"/>
+        <xs:unique name="UniqueToolName">
+            <xs:selector xpath=".//tool"/>
             <xs:field xpath="@name"/>
         </xs:unique>
         <xs:unique name="UniqueStepNo">
@@ -19,30 +19,15 @@
         </xs:unique>
     </xs:element>
 
-    <xs:complexType name="backupType">
-        <xs:sequence>
-            <xs:element name="options" type="p:optionsType" minOccurs="0"/>
-            <xs:element name="scripts" type="p:scriptsType" minOccurs="0"/>
-            <xs:element name="sources" type="p:sourcesType" minOccurs="0"/>
-            <xs:element name="databases" type="p:databasesType" minOccurs="0"/>
-            <xs:element name="pipeline" type="p:pipelineType"/>
-        </xs:sequence>
-    </xs:complexType>
-
-    <xs:complexType name="optionsType">
-        <xs:sequence>
-            <xs:element name="rsync" type="p:rootStrType" minOccurs="0"/>
-            <xs:element name="target" type="xs:string" minOccurs="0"/>
-        </xs:sequence>
-    </xs:complexType>
-
-    <xs:complexType name="rootStrType">
-        <xs:simpleContent>
-            <xs:extension base="xs:string">
-                <xs:attribute name="root" type="p:BooleanType" use="optional"/>
-            </xs:extension>
-        </xs:simpleContent>
-    </xs:complexType>
+    <xs:attributeGroup name="name">
+        <xs:attribute name="name" use="required">
+            <xs:simpleType>
+                <xs:restriction base="xs:string">
+                    <xs:pattern value="duplicity|rsync|tar"/>
+                </xs:restriction>
+            </xs:simpleType>
+        </xs:attribute>
+    </xs:attributeGroup>
 
     <xs:simpleType name="BooleanType">
         <xs:restriction base="xs:string">
@@ -56,6 +41,37 @@
             <xs:enumeration value="off"/>
         </xs:restriction>
     </xs:simpleType>
+
+    <xs:attributeGroup name="root">
+        <xs:attribute name="root" type="p:BooleanType" use="optional"/>
+    </xs:attributeGroup>
+
+    <xs:complexType name="backupType">
+        <xs:choice>
+            <xs:sequence>
+                <xs:element name="tool" type="p:toolType"/>
+                <xs:element name="target" type="xs:string" minOccurs="0"/>
+                <xs:element name="scripts" type="p:scriptsType" minOccurs="0"/>
+                <xs:element name="sources" type="p:sourcesType" minOccurs="0"/>
+                <xs:element name="databases" type="p:databasesType" minOccurs="0"/>
+                <xs:element name="pipeline" type="p:pipelineType"/>
+            </xs:sequence>
+            <xs:sequence>
+                <xs:element name="scripts" type="p:scriptsType" minOccurs="0"/>
+                <xs:element name="sources" type="p:sourcesType" minOccurs="0"/>
+                <xs:element name="databases" type="p:databasesType" minOccurs="0"/>
+            </xs:sequence>
+        </xs:choice>
+    </xs:complexType>
+
+    <xs:complexType name="toolType">
+        <xs:simpleContent>
+            <xs:extension base="xs:string">
+                <xs:attributeGroup ref="p:name"/>
+                <xs:attributeGroup ref="p:root"/>
+            </xs:extension>
+        </xs:simpleContent>
+    </xs:complexType>
 
     <xs:complexType name="pipelineType">
         <xs:sequence>
@@ -84,27 +100,34 @@
     </xs:complexType>
 
     <xs:complexType name="scriptType">
-        <xs:sequence>
-            <xs:element name="command" type="xs:string"/>
-            <xs:element name="args" type="xs:string" minOccurs="0"/>
-        </xs:sequence>
-        <xs:attribute name="id" type="xs:integer" use="required"/>
-        <xs:attribute name="root" type="p:BooleanType" use="optional"/>
+        <xs:simpleContent>
+            <xs:extension base="xs:string">
+                <xs:attribute name="name" type="xs:string" use="required"/>
+                <xs:attributeGroup ref="p:root"/>
+                <xs:attribute name="id" type="xs:integer" use="required"/>
+            </xs:extension>
+        </xs:simpleContent>
     </xs:complexType>
 
     <xs:complexType name="sourcesType">
         <xs:sequence>
-            <xs:element name="file" type="p:rootStrType" minOccurs="0" maxOccurs="unbounded"/>
+            <xs:element name="file" type="p:fileType" minOccurs="0" maxOccurs="unbounded"/>
             <xs:element name="source" type="p:sourceType" minOccurs="0" maxOccurs="unbounded"/>
         </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="fileType">
+        <xs:simpleContent>
+            <xs:extension base="xs:string">
+                <xs:attributeGroup ref="p:root"/>
+            </xs:extension>
+        </xs:simpleContent>
     </xs:complexType>
 
     <xs:complexType name="sourceType">
         <xs:sequence>
             <xs:element name="path" type="p:pathType"/>
             <xs:element name="exclude" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
-            <xs:element name="target" type="xs:string" minOccurs="0"/>
-            <xs:element name="rsync" type="p:rootStrType" minOccurs="0"/>
             <xs:element name="pre_script" type="xs:integer" minOccurs="0"/>
             <xs:element name="post_script" type="xs:integer" minOccurs="0"/>
         </xs:sequence>
@@ -140,7 +163,6 @@
             <xs:element name="pass" type="xs:string" minOccurs="0"/>
             <xs:element name="options" type="xs:string" minOccurs="0"/>
             <xs:element name="ssh" type="xs:string" minOccurs="0"/>
-            <xs:element name="target" type="xs:string" minOccurs="0"/>
         </xs:sequence>
     </xs:complexType>
 </xs:schema>

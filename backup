@@ -2,21 +2,21 @@
 # -*- coding: utf-8 -*-
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 # Copyright (C) 2019-2022 J. Nathanael Philipp (jnphilipp) <nathanael@philipp.land>
-"""Python wrapper for rsync to easily configure rsync.
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-"""
+# backup: Python wrapper for rsync.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""backup: Python wrapper for rsync."""
 
 import gzip
 import logging
@@ -28,6 +28,7 @@ import time
 
 from argparse import ArgumentParser, FileType, RawTextHelpFormatter
 from dataclasses import dataclass, field
+from enum import Enum
 from lxml import etree
 from pathlib import Path
 from time import sleep
@@ -56,6 +57,13 @@ VERSION = (
     + f"\nWritten by {__author__} <{__email__}>"
 )
 NAMESPACE = {"p": "https://github.com/jnphilipp/backup/"}
+
+
+class Tool(str, Enum):
+    """Supported backup tools."""
+
+    RSYNC = "rsync"
+    TAR = "tar"
 
 
 @dataclass
@@ -103,13 +111,18 @@ class Database:
 
         return db
 
-    def _pass(self) -> Optional[str]:
-        if self.passwordstore is None:
+    def _get_password(self) -> Optional[str]:
+        if self.password is not None:
+            return self.password
+        elif self.passwordstore is not None:
+            logging.debug(f"Get password {self.passwordstore} from pass.")
+            pobj = subprocess.Popen(
+                ["pass", self.passwordstore], stdout=subprocess.PIPE
+            )
+            self.password = pobj.communicate()[0].decode("utf-8").split("\n")[0]
+            return self.password
+        else:
             return None
-
-        logging.debug(f"Get password {self.passwordstore} from pass.")
-        pobj = subprocess.Popen(["pass", self.passwordstore], stdout=subprocess.PIPE)
-        return pobj.communicate()[0].decode("utf-8").split("\n")[0]
 
     def _run(
         self, args: List[str], env: Dict[str, str], target: Path
@@ -135,7 +148,7 @@ class Database:
         """Build cmd command arguments."""
         raise NotImplementedError()
 
-    def backup(self):
+    def backup(self, dry_run: bool = False):
         """Make backup."""
         raise NotImplementedError()
 
@@ -146,12 +159,7 @@ class PostgreSQL(Database):
 
     def build_command_args(self) -> List[str]:
         """Build cmd command arguments."""
-        if self.passwordstore is not None and self.ssh is not None:
-            password = self._pass()
-        elif self.password is not None and self.ssh is not None:
-            password = self.password
-        else:
-            password = None
+        password = self._get_password()
 
         if self.ssh is None:
             args: List[str] = []
@@ -166,14 +174,13 @@ class PostgreSQL(Database):
         args.append(self.name)
         return args
 
-    def backup(self):
+    def backup(self, dry_run: bool = False):
         """Make backup."""
-        if self.passwordstore is not None and self.ssh is None:
-            env = {"PGPASSWORD": self._pass()}
-        elif self.password is not None and self.ssh is None:
-            env = {"PGPASSWORD": self.password}
-        else:
-            env = {}
+        env: Dict[str, str] = {}
+        if self.ssh is None:
+            s = self._get_password()
+            if s is not None:
+                env["PGPASSWORD"] = s
 
         args = self.build_command_args()
         cmd = '" "'.join(
@@ -187,17 +194,23 @@ class PostgreSQL(Database):
         if self.target is not None:
             path = self.target / path
         path = path.absolute()
-        if not path.exists():
+        if not path.exists() and not dry_run:
             path.mkdir(parents=True, exist_ok=True)
 
         path /= f"{self.name}_{timestamp()}.sql.gz"
         logging.debug(f"Storing {self.name} dump in {path}.")
 
-        pobj = self._run(args, env, path)
-        if pobj.returncode != 0:
-            err = pobj.stderr.read()
-            logging.error(f"PostgreSQL {self.name} dump failed.")
-            logging.error(err.strip())
+        if dry_run:
+            logging.info(" ".join([f"{k}={v}" for k, v in env.items()]))
+            logging.info(" ".join(args))
+            logging.info(f"target={path}")
+        else:
+            pobj = self._run(args, env, path)
+            if pobj.returncode != 0:
+                if pobj.stderr is not None:
+                    err = pobj.stderr.read()
+                    logging.error(f"PostgreSQL {self.name} dump failed.")
+                    logging.error(err.strip())
 
 
 @dataclass
@@ -206,12 +219,7 @@ class MySQL(Database):
 
     def build_command_args(self) -> List[str]:
         """Build cmd command arguments."""
-        if self.passwordstore is not None and self.ssh is not None:
-            password = self._pass()
-        elif self.password is not None and self.ssh is not None:
-            password = self.password
-        else:
-            password = None
+        password = self._get_password()
 
         if self.ssh is None:
             args: List[str] = []
@@ -226,14 +234,13 @@ class MySQL(Database):
         args.append(self.name)
         return args
 
-    def backup(self):
+    def backup(self, dry_run: bool = False):
         """Make backup."""
-        if self.passwordstore is not None and self.ssh is None:
-            env = {"MYSQL_PWD": self._pass()}
-        elif self.password is not None and self.ssh is None:
-            env = {"MYSQL_PWD": self.password}
-        else:
-            env = {}
+        env: Dict[str, str] = {}
+        if self.ssh is None:
+            s = self._get_password()
+            if s is not None:
+                env["MYSQL_PWD"] = s
 
         args = self.build_command_args()
         cmd = '" "'.join(
@@ -247,17 +254,23 @@ class MySQL(Database):
         if self.target is not None:
             path = self.target / path
         path = path.absolute()
-        if not path.exists():
+        if not path.exists() and not dry_run:
             path.mkdir(parents=True, exist_ok=True)
 
         path /= f"{self.name}_{timestamp()}.sql.gz"
         logging.debug(f"Storing {self.name} dump in {path}.")
 
-        pobj = self._run(args, env, path)
-        if pobj.returncode != 0:
-            err = pobj.stderr.read()
-            logging.error(f"MySQL {self.name} dump failed.")
-            logging.error(err.strip())
+        if dry_run:
+            logging.info(" ".join([f"{k}={v}" for k, v in env.items()]))
+            logging.info(" ".join(args))
+            logging.info(f"target={path}")
+        else:
+            pobj = self._run(args, env, path)
+            if pobj.returncode != 0:
+                if pobj.stderr is not None:
+                    err = pobj.stderr.read()
+                    logging.error(f"MySQL {self.name} dump failed.")
+                    logging.error(err.strip())
 
 
 @dataclass
@@ -276,7 +289,7 @@ class Script:
         cls: Type[T],
         e: etree.Element,
         cwd: Optional[Path] = None,
-        default_args: List[str] = [],
+        cmd: Union[Tuple[Tool, List[str]], List[str]] = [],
         default_as_root: bool = False,
         **kwargs,
     ) -> T:
@@ -285,12 +298,14 @@ class Script:
         Args:
          * e: XML Element
          * cwd: path to working dir to run from
-         * default_args: default list of arguments if not otherwise specified.
+         * cmd: default list of arguments if not otherwise specified.
          * default_as_root: default as root if not otherwise specified.
 
         Returns:
          * Instance of script.
         """
+        assert isinstance(cmd, list)
+
         path = Path(e.find("p:command", namespaces=NAMESPACE).text.strip())
         as_root = (
             to_bool(e.attrib["root"].strip(), False)
@@ -300,17 +315,17 @@ class Script:
         if e.find("p:args", namespaces=NAMESPACE) is not None:
             args = shlex.split(e.find("p:args", namespaces=NAMESPACE).text.strip())
         else:
-            args = default_args
+            args = cmd
         return cls(path, args, cwd, as_root)
 
-    def build_command_args(self) -> List[str]:
+    def build_command_args(self, dry_run: bool = False) -> List[str]:
         """Build cmd command arguments."""
         if self.as_root:
             return ["sudo", str(self.path)] + self.args
         else:
             return [str(self.path)] + self.args
 
-    def run(self):
+    def run(self, dry_run: bool = False):
         """Run."""
 
         def log(stream, logger, writer):
@@ -323,24 +338,28 @@ class Script:
                 else:
                     break
 
-        args = self.build_command_args()
+        args = self.build_command_args(dry_run)
         cmd = '" "'.join(args)
         logging.debug(f'Running: "{cmd}" with cwd={self.cwd}')
 
-        pobj = subprocess.Popen(
-            args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=self.cwd
-        )
+        if dry_run:
+            logging.info(f'"{cmd}"')
+            logging.info(f"cwd={self.cwd}")
+        else:
+            pobj = subprocess.Popen(
+                args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=self.cwd
+            )
 
-        t_stdout = Thread(target=log, args=(pobj.stdout, logging.info, sys.stdout))
-        t_stderr = Thread(target=log, args=(pobj.stderr, logging.error, sys.stderr))
+            t_stdout = Thread(target=log, args=(pobj.stdout, logging.info, sys.stdout))
+            t_stderr = Thread(target=log, args=(pobj.stderr, logging.error, sys.stderr))
 
-        t_stdout.start()
-        t_stderr.start()
+            t_stdout.start()
+            t_stderr.start()
 
-        while t_stdout.is_alive() and t_stderr.is_alive():
-            pass
-        pobj.wait()
-        sleep(1)
+            while t_stdout.is_alive() and t_stderr.is_alive():
+                pass
+            pobj.wait()
+            sleep(1)
 
 
 @dataclass
@@ -349,6 +368,7 @@ class Source(Script):
 
     T = TypeVar("T", bound="Source")
 
+    tool: Tool
     target: Path
     host: Optional[str] = None
     excludes: Set[str] = field(default_factory=set)
@@ -372,7 +392,7 @@ class Source(Script):
         cls: Type[T],
         e: etree.Element,
         cwd: Optional[Path] = None,
-        default_args: List[str] = [],
+        cmd: Union[Tuple[Tool, List[str]], List[str]] = [],
         default_as_root: bool = False,
         **kwargs,
     ) -> T:
@@ -381,12 +401,14 @@ class Source(Script):
         Args:
          * e: XML Element
          * cwd: path to working dir to run from
-         * default_args: default list of arguments if not otherwise specified.
-         * default_as_root: default as root if not otherwise specified.
+         * cmd: backup tool, an instance of the Tool enum.
+         * as_root: default as root if not otherwise specified.
 
         Returns:
          * Instance of script.
         """
+        assert isinstance(cmd, tuple)
+
         default_target = (
             kwargs["default_target"] if "default_target" in kwargs else None
         )
@@ -394,38 +416,24 @@ class Source(Script):
 
         path = e.find("p:path", namespaces=NAMESPACE)
         host = path.attrib["host"] if "host" in path.attrib else None
-        if e.find("p:rsync", namespaces=NAMESPACE) is not None:
-            e = e.find("p:rsync", namespaces=NAMESPACE)
-            args = shlex.split(e.text.strip())
-            as_root = (
-                to_bool(e.attrib["root"].strip(), False)
-                if "root" in e.attrib
-                else default_as_root
-            )
-        else:
-            args = default_args
-            as_root = default_as_root
+
         if e.find("p:target", namespaces=NAMESPACE) is not None:
-            source = cls(
-                path=Path(path.text.strip()),
-                args=args,
-                cwd=None,
-                as_root=as_root,
-                host=host,
-                target=Path(e.find("p:target", namespaces=NAMESPACE).text.strip()),
-            )
+            target = Path(e.find("p:target", namespaces=NAMESPACE).text.strip())
         elif default_target is not None:
-            source = cls(
-                path=Path(path.text.strip()),
-                args=args,
-                cwd=None,
-                as_root=as_root,
-                host=host,
-                target=default_target,
-            )
+            target = default_target
         else:
             logging.error(f"No target for source {path}.")
             sys.exit(1)
+
+        source = cls(
+            tool=cmd[0],
+            path=Path(path.text.strip()),
+            args=cmd[1],
+            cwd=None,
+            as_root=default_as_root,
+            host=host,
+            target=target,
+        )
 
         if e.find("p:exclude", namespaces=NAMESPACE) is not None:
             excludes = set()
@@ -444,7 +452,7 @@ class Source(Script):
 
         return source
 
-    def build_command_args(self) -> List[str]:
+    def build_command_args(self, dry_run: bool = False) -> List[str]:
         """Build command line arguments."""
         if self.host:
             logging.info(f"Backup remote source {self.host}:{self.path}.")
@@ -457,21 +465,51 @@ class Source(Script):
                 path = self.path.parent
 
         target = self.target / self.hostname / "files"
-        target = target / path.relative_to(target.anchor)
         backup_dir = self.target / self.hostname / "backup"
-        backup_dir = backup_dir / path.relative_to(backup_dir.anchor)
+
+        snapshot = None
+        if self.tool == Tool.RSYNC:
+            target = target / path.relative_to(target.anchor)
+            backup_dir = backup_dir / path.relative_to(backup_dir.anchor)
+        elif self.tool == Tool.TAR:
+            target = target / path.parent.relative_to(target.anchor)
+            if not target.exists() and not dry_run:
+                target.mkdir(parents=True, exist_ok=True)
+            snapshot = target / f"{path.name}.snapshot"
+            tar_name = f"{path.name}.%d.tar"
 
         logging.info(f"Backup target {target}.")
 
-        if not target.exists():
+        if not target.exists() and not dry_run:
             target.mkdir(parents=True, exist_ok=True)
 
-        cmd = ["rsync"]
+        cmd = [self.tool.value]
         if self.as_root:
             cmd = ["sudo"] + cmd
         for arg in self.args:
-            if arg == "--backup-dir=%s":
+            if self.tool == Tool.TAR:
+                if arg in ["-z", "--gzip", "--gunzip", "--ungzip"]:
+                    tar_name += ".gz"
+                elif arg in ["-j", "--bzip2"]:
+                    tar_name += ".bz2"
+                elif arg in ["-J", "--xz"]:
+                    tar_name += ".xz"
+                elif arg == "--lzip":
+                    tar_name += ".lz"
+                elif arg == "--lzma":
+                    tar_name += ".lzma"
+                elif arg == "--lzop":
+                    tar_name += ".lzo"
+                elif arg in ["-Z", "--compress", "--uncompress"]:
+                    tar_name += ".Z"
+                elif arg == "--zstd":
+                    tar_name += ".zst"
+
+            if self.tool == Tool.RSYNC and arg == "--backup-dir=%s":
                 cmd += [arg % backup_dir]
+            elif self.tool == Tool.TAR and arg == "--listed-incremental=%s":
+                tar_name %= len(list(target.glob(tar_name.replace("%d", "*"))))
+                cmd += [arg % snapshot]
             else:
                 cmd += [arg]
         for exclude in self.excludes:
@@ -479,24 +517,33 @@ class Source(Script):
 
         source = str(self.path)
         if self.host:
-            source = f"{self.host}:{self.path}/"
+            source = f"{self.host}:{self.path}{'/' if self.tool == Tool.RSYNC else ''}"
         elif self.path.is_dir():
-            source = f"{self.path}/"
+            source = f"{self.path}{'/' if self.tool == Tool.RSYNC else ''}"
 
-        return cmd + [
-            source,
-            str(target.absolute()),
-        ]
+        if self.tool == Tool.RSYNC:
+            return cmd + [
+                source,
+                str(target.absolute()),
+            ]
+        elif self.tool == Tool.TAR:
+            return cmd + [
+                "--file",
+                str((target / tar_name).absolute()),
+                source,
+            ]
+        else:
+            return []
 
-    def backup(self):
+    def backup(self, dry_run: bool = False):
         """Make backup."""
         if self.pre_script is not None:
             logging.info(f"Run pre-script {self.pre_script.path}.")
-            self.pre_script.run()
-        self.run()
+            self.pre_script.run(dry_run)
+        self.run(dry_run)
         if self.post_script is not None:
             logging.info(f"Run post-script {self.post_script.path}.")
-            self.post_script.run()
+            self.post_script.run(dry_run)
 
 
 def to_bool(string: str, default: bool = False) -> bool:
@@ -550,6 +597,8 @@ def load(
     Returns:
      * XML as etree.ElementTree if valid otherwise None
     """
+    if not Path(schema_path).exists():
+        schema_path = "./backup.xsd"
     logging.debug(
         f'Loading XML file "{path if isinstance(path, Path) else path.name}".'
     )
@@ -575,7 +624,8 @@ def parse(
     path: Union[Path, TextIO],
     target: Optional[Path] = None,
     as_root: Optional[bool] = None,
-    rsync_config: List[str] = [],
+    tool: Optional[Tool] = None,
+    config: Optional[List[str]] = None,
 ) -> Tuple[
     Dict[int, str], List[Source], List[MySQL], List[PostgreSQL], Dict[int, Script]
 ]:
@@ -585,18 +635,21 @@ def parse(
      * path: path to XML file to parse
      * target: optional target to use as default target
     """
+    assert (tool is None and config is None) or (
+        tool is not None and config is not None
+    )
+
     doc = load(path)
     if doc is None:
         sys.exit(1)
 
-    if (
-        not rsync_config
-        and doc.find("p:options/p:rsync", namespaces=NAMESPACE) is not None
-    ):
-        e = doc.find("p:options/p:rsync", namespaces=NAMESPACE)
-        rsync_config = shlex.split(e.text.strip())
-        if as_root is None and "root" in e.attrib:
-            as_root = to_bool(e.attrib["root"].strip(), False)
+    if tool is None and config is None:
+        e = doc.find("p:tool", namespaces=NAMESPACE)
+        tool = Tool(e.attrib["name"].strip())
+        config = shlex.split(e.text.strip()) if e.text else []
+
+    if as_root is None and "root" in e.attrib:
+        as_root = to_bool(e.attrib["root"].strip(), False)
 
     if (
         target is None
@@ -621,7 +674,7 @@ def parse(
         sources.append(
             Source.from_xml(
                 e,
-                default_args=rsync_config,
+                tool=(tool, config),
                 default_as_root=False if as_root is None else as_root,
                 default_target=target,
                 scripts=scripts,
@@ -632,18 +685,21 @@ def parse(
     for step in doc.xpath("p:pipeline/*", namespaces=NAMESPACE):
         pipeline[int(step.attrib["no"].strip())] = step.text.strip()
 
-    for e in doc.xpath("p:databases/p:file", namespaces=NAMESPACE):
-        values = parse(Path(e.text.strip()), target)
-        sources += values[1]
-        mysqls += values[2]
-        pgsqls += values[3]
-
-    for e in doc.xpath("p:sources/p:file", namespaces=NAMESPACE):
+    for e in doc.xpath("p:sources/p:file", namespaces=NAMESPACE) + doc.xpath(
+        "p:databases/p:file", namespaces=NAMESPACE
+    ):
+        npath = Path(e.text.strip())
+        if not npath.is_absolute():
+            if isinstance(path, Path):
+                npath = path.parent / npath
+            else:
+                npath = Path(path.name).parent / npath
         values = parse(
-            Path(e.text.strip()),
+            npath,
             target,
-            rsync_config=rsync_config,
             as_root=to_bool(e.attrib["root"], False) if "root" in e.attrib else as_root,
+            tool=tool,
+            config=config,
         )
         sources += values[1]
         mysqls += values[2]
@@ -756,6 +812,11 @@ if __name__ == "__main__":
         help="send notifications for pipeline steps",
     )
     parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="dry run.",
+    )
+    parser.add_argument(
         "XML",
         type=FileType("r", encoding="utf8"),
         default=sys.stdout,
@@ -825,16 +886,16 @@ if __name__ == "__main__":
                 for source in sources:
                     if args.notify:
                         send_notification(f"Starting backup of {source.path}")
-                    source.backup()
+                    source.backup(args.dry_run)
             elif v == "postgresql-dbs" and not (args.postgres or args.database):
                 for pgsql in pgsqls:
-                    pgsql.backup()
+                    pgsql.backup(args.dry_run)
             elif v == "mysql-dbs" and not (args.mysql or args.database):
                 for mysql in mysqls:
-                    mysql.backup()
+                    mysql.backup(args.dry_run)
             elif v.startswith("script-"):
                 logging.info(f"Running script {scripts[int(v[7:])].path}.")
-                scripts[int(v[7:])].run()
+                scripts[int(v[7:])].run(args.dry_run)
 
     if args.snapshot or args.snapshot_only:
         if args.notify:
