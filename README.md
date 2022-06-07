@@ -3,6 +3,7 @@
 Easily configure and reproducibly run complex backups.
 
 [![Tests](https://github.com/jnphilipp/backup/actions/workflows/tests.yml/badge.svg)](https://github.com/jnphilipp/backup/actions/workflows/tests.yml)
+[![DEB Package](https://github.com/jnphilipp/backup/actions/workflows/deb.yml/badge.svg)](https://github.com/jnphilipp/backup/actions/workflows/deb.yml)
 
 ## Features
  * Configure complex backups with XML
