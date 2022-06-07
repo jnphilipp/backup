@@ -2,7 +2,7 @@
 
 Easily configure and reproducibly run complex backups.
 
-[![Tests](https://github.com/jnphilipp/backup/actions/workflows/test.yml/badge.svg)](https://github.com/jnphilipp/backup/actions/workflows/test.yml)
+[![Tests](https://github.com/jnphilipp/backup/actions/workflows/tests.yml/badge.svg)](https://github.com/jnphilipp/backup/actions/workflows/tests.yml)
 
 ## Features
  * Configure complex backups with XML
