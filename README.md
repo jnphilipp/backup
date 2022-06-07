@@ -1,31 +1,36 @@
 # backup
 
-Python wrapper for rsync for easy configuration.
+Easily configure and reproducibly run complex backups.
+
+[![Tests](https://github.com/jnphilipp/backup/actions/workflows/test.yml/badge.svg)](https://github.com/jnphilipp/backup/actions/workflows/test.yml)
 
 ## Features
- * Configure complex rsync backups over XML
+ * Configure complex backups with XML
  * XML schema validation
- * Configurable scripts to run
+ * Configurable scripts to run during backup
+ * Support for rsync and tar
  * Database dumps for MySQL and PostgreSQL
  * Configurable pipeline
+ * Snapshots
+
+
+## Requirements
+
+* Python 3.7 or newer
+* python-lxml
+* rsync or tar as backup tool
 
 
 ## Install
 
-```
-$ sudo make install
-```
+* from Source: ```make install```
+* deb-Package: ```make deb```
+* [AUR](https://aur.archlinux.org/packages/backup)
 
-## Debian-Package
+## Usage
 
-```
-$ make deb
-```
+For options see `$ backup -h`. For example XML configuration have a look at `/tests/rsync.xml` or `/tests/tar.xml`.
 
-### Usage
+### Icon
 
-For options see `$ backup -h`. An example XML configuration is in `test.xml`.
-
-#### Icon
-
-Icon made from [Icon Fonts](http://www.onlinewebfonts.com/icon) is licensed by CC BY 3.0.
+Icon made from [Icon Fonts](http://www.onlinewebfonts.com/icon) licensed by CC BY 3.0.
