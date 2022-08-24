@@ -66,9 +66,10 @@ class TarBackupTests(unittest.TestCase):
         self.assertEqual(p.returncode, 0)
         regex = (
             r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Using '[^']+' as backup "
-            + r"target\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup "
-            + r"local source /boot\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] "
-            + r"Backup target .*?/BACKUPS/.*?/files\.\n\d{4}-\d\d-\d\d "
+            + r"target\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[ERROR\] The given "
+            + r"target path does not exists\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} "
+            + r"\[INFO\] Backup local source /boot\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,"
+            + r"\d{3} \[INFO\] Backup target .*?/BACKUPS/.*?/files\.\n\d{4}-\d\d-\d\d "
             + r'\d\d:\d\d:\d\d,\d{3} \[INFO\] "sudo" "tar" "--create" "--gzip" '
             + r'"--listed-incremental=.*?/BACKUPS/.*?/files/boot\.snapshot" "--verbose"'
             + r' "--file" ".*?/BACKUPS/.*?/files/boot\.0\.tar\.gz" "/boot"\n'

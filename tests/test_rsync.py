@@ -67,10 +67,11 @@ class RsyncBackupTests(unittest.TestCase):
         self.assertEqual(p.returncode, 0)
         regex = (
             r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Using '[^']+' as backup "
-            + r"target\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup "
-            + r"local source /boot\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] "
-            + r"Backup target .*?/BACKUPS/.*?/files/boot\.\n\d{4}-\d\d-\d\d "
-            + r'\d\d:\d\d:\d\d,\d{3} \[INFO\] "sudo" "rsync" "--delete" '
+            + r"target\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[ERROR\] The given "
+            + r"target path does not exists\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} "
+            + r"\[INFO\] Backup local source /boot\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,"
+            + r"\d{3} \[INFO\] Backup target .*?/BACKUPS/.*?/files/boot\.\n\d{4}-\d\d-"
+            + r'\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] "sudo" "rsync" "--delete" '
             + r'"--delete-excluded" "--stats" "--backup-dir=.*?/BACKUPS/.*?/backup/'
             + r'boot" "-abuchPpzz" "/boot/" ".*?/BACKUPS/.*?/files/boot"\n'
             + r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] cwd=None\n\d{4}-\d\d-\d\d"
@@ -114,6 +115,7 @@ class RsyncBackupTests(unittest.TestCase):
             + r" \[INFO\] cwd=None\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] "
             + r"Backup complete\.\n"
         )
+        print(stdout)
         self.assertIsNotNone(re.fullmatch(regex, stdout))
         self.assertEqual("", stderr)
 
