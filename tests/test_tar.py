@@ -65,8 +65,8 @@ class TarBackupTests(unittest.TestCase):
         stdout, stderr = p.communicate()
         self.assertEqual(p.returncode, 0)
         regex = (
-            r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Override backup target "
-            + r".*?/BACKUPS\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup "
+            r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Using '[^']+' as backup "
+            + r"target\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup "
             + r"local source /boot\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] "
             + r"Backup target .*?/BACKUPS/.*?/files\.\n\d{4}-\d\d-\d\d "
             + r'\d\d:\d\d:\d\d,\d{3} \[INFO\] "sudo" "tar" "--create" "--gzip" '
