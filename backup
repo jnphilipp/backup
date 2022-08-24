@@ -864,7 +864,12 @@ if __name__ == "__main__":
                 print(f"XML file {args.XML.name} is valid.")
             sys.exit(0)
         else:
-            logging.info(f"Override backup target {args.TARGET}.")
+            if args.TARGET:
+                logging.info(f"Using '{args.TARGET}' as backup target.")
+                if not args.TARGET.exists():
+                    logging.error("The given target path does not exists.")
+                    sys.exit(1)
+
             pipeline, sources, mysqls, pgsqls, scripts = parse(args.XML, args.TARGET)
     else:
         parser.print_usage()
