@@ -20,7 +20,6 @@
 import re
 import unittest
 
-from pathlib import Path
 from subprocess import Popen, PIPE
 
 
