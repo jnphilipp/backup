@@ -868,7 +868,8 @@ if __name__ == "__main__":
                 logging.info(f"Using '{args.TARGET}' as backup target.")
                 if not args.TARGET.exists():
                     logging.error("The given target path does not exists.")
-                    sys.exit(1)
+                    if not args.dry_run:
+                        sys.exit(1)
 
             pipeline, sources, mysqls, pgsqls, scripts = parse(args.XML, args.TARGET)
     else:
