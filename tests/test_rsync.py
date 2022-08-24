@@ -20,6 +20,7 @@
 import re
 import unittest
 
+from pathlib import Path
 from subprocess import Popen, PIPE
 
 
@@ -56,6 +57,7 @@ class RsyncBackupTests(unittest.TestCase):
         self.assertEqual(stderr, "")
 
     def test_backup(self):
+        Path("./BACKUPS").mkdir()
         p = Popen(
             ["./backup", "--dry-run", "-v", "./tests/rsync.xml", "./BACKUPS"],
             stdout=PIPE,
