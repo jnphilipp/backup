@@ -26,7 +26,12 @@ import subprocess
 import sys
 import time
 
-from argparse import ArgumentParser, FileType, RawTextHelpFormatter
+from argparse import (
+    ArgumentDefaultsHelpFormatter,
+    ArgumentParser,
+    FileType,
+    RawTextHelpFormatter,
+)
 from dataclasses import dataclass, field
 from enum import Enum
 from lxml import etree
@@ -57,6 +62,12 @@ VERSION = (
     + f"\nWritten by {__author__} <{__email__}>"
 )
 NAMESPACE = {"p": "https://github.com/jnphilipp/backup/"}
+
+
+class ArgFormatter(ArgumentDefaultsHelpFormatter, RawTextHelpFormatter):
+    """Combination of ArgumentDefaultsHelpFormatter and RawTextHelpFormatter."""
+
+    pass
 
 
 class Tool(str, Enum):
@@ -748,7 +759,7 @@ def snapshot(sources: List[Source]):
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(prog="backup", formatter_class=RawTextHelpFormatter)
+    parser = ArgumentParser(prog="backup", formatter_class=ArgFormatter)
     parser.add_argument(
         "-V",
         "--version",
