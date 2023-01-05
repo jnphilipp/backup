@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
-# Copyright (C) 2019-2022 J. Nathanael Philipp (jnphilipp) <nathanael@philipp.land>
+# Copyright (C) 2019-2023 J. Nathanael Philipp (jnphilipp) <nathanael@philipp.land>
 # backup: Easily configure and reproducibly run complex backups.
 #
 # This program is free software: you can redistribute it and/or modify

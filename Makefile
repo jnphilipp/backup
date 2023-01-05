@@ -55,7 +55,7 @@ build/copyright: build
 	$(Q)echo "Upstream-Name: backup" > build/copyright
 	$(Q)echo "Source: https://github.com/jnphilipp/backup" >> build/copyright
 	$(Q)echo "Files: *" >> build/copyright
-	$(Q)echo "Copyright: 2019-2022 J. Nathanael Philipp (jnphilipp) <nathanael@philipp.land>" >> build/copyright
+	$(Q)echo "Copyright: 2019-2023 J. Nathanael Philipp (jnphilipp) <nathanael@philipp.land>" >> build/copyright
 	$(Q)echo "License: GPL-3+" >> build/copyright
 	$(Q)echo " This program is free software: you can redistribute it and/or modify" >> build/copyright
 	$(Q)echo " it under the terms of the GNU General Public License as published by" >> build/copyright
