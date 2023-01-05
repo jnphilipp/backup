@@ -718,42 +718,42 @@ if __name__ == "__main__":
         "--is-valid",
         action="store_true",
         dest="check_valid",
-        help="checks the given XML file on validity",
+        help="checks the given XML file validity.",
     )
     parser.add_argument(
         "-d",
         "--no-database",
         action="store_true",
         dest="database",
-        help="disable database dumps",
+        help="disable database dumps.",
     )
     parser.add_argument(
         "-p",
         "--no-postgres",
         action="store_true",
         dest="postgres",
-        help="disables PostgreSQL dumps",
+        help="disables PostgreSQL dumps.",
     )
     parser.add_argument(
         "-m",
         "--no-mysql",
         action="store_true",
         dest="mysql",
-        help="disables MySQL dumps",
+        help="disables MySQL dumps.",
     )
     parser.add_argument(
         "-s",
         "--snapshot",
         action="store_true",
         dest="snapshot",
-        help="make a snapshot, as tar.gz",
+        help="make a snapshot, as tar.gz.",
     )
     parser.add_argument(
         "-S",
         "--snapshot-only",
         action="store_true",
         dest="snapshot_only",
-        help="only make a snapshot, as tar.gz",
+        help="only make a snapshot, as tar.gz.",
     )
     parser.add_argument(
         "-v",
@@ -766,18 +766,18 @@ if __name__ == "__main__":
         "-f",
         "--log-format",
         default="%(asctime)s [%(levelname)s] %(message)s",
-        help="logging format.",
+        help="set logging format.",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="dry run.",
+        help="do a dry run.",
     )
     parser.add_argument(
         "XML",
         type=FileType("r", encoding="utf8"),
         default=sys.stdout,
-        help="XML config file",
+        help="XML config file.",
     )
     parser.add_argument(
         "TARGET",
