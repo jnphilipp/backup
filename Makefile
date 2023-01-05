@@ -24,7 +24,6 @@ install: backup backup.xsd backup.bash-completion build/copyright build/changelo
 	$(Q)install -Dm 0644 build/changelog.Debian.gz "${DEST_DIR}/${DOC_DIR}"/backup/changelog.Debian.gz
 	$(Q)install -Dm 0644 build/copyright "${DEST_DIR}/${DOC_DIR}"/backup/copyright
 	$(Q)install -Dm 0644 build/backup.1.gz "${DEST_DIR}/${MAN_DIR}"/man1/backup.1.gz
-	$(Q)install -Dm 0644 backup.svg "${DEST_DIR}/${ICON_DIR}"/hicolor/scalable/apps/backup.svg
 
 	@echo "backup install completed."
 
@@ -106,7 +105,7 @@ build/backup.1.gz: build build/copyright.h2m
 	$(Q)help2man ./backup -i build/copyright.h2m -n "Python wrapper for rsync." | gzip -n9 > build/backup.1.gz
 	$(Q)LC_ALL=en_US.UTF-8 MANROFFSEQ='' MANWIDTH=80 man --warnings -E UTF-8 -l -Tutf8 -Z ./build/backup.1.gz > /dev/null
 
-build/package/DEBIAN/md5sums: backup backup.xsd backup.bash-completion backup.svg build/copyright build/changelog.Debian.gz build/backup.1.gz
+build/package/DEBIAN/md5sums: backup backup.xsd backup.bash-completion build/copyright build/changelog.Debian.gz build/backup.1.gz
 	$(Q)make install DEST_DIR=build/package
 	$(Q)mkdir -p build/package/DEBIAN
 	$(Q)find build/package -type f -not -path "*DEBIAN*" -exec md5sum {} \; > build/md5sums
@@ -120,7 +119,7 @@ build/package/DEBIAN/control: build/package/DEBIAN/md5sums
 	$(Q)echo "Priority: optional" >> build/package/DEBIAN/control
 	$(Q)echo "Architecture: all" >> build/package/DEBIAN/control
 	$(Q)echo "Depends: python3 (>= 3.7), python3-lxml, rsync" >> build/package/DEBIAN/control
-	$(Q)echo "Recommends: pass, python-notify2" >> build/package/DEBIAN/control
+	$(Q)echo "Recommends: pass" >> build/package/DEBIAN/control
 	$(Q)echo "Installed-Size: `du -sk build/package/usr | grep -oE "[0-9]+"`" >> build/package/DEBIAN/control
 	$(Q)echo "Maintainer: J. Nathanael Philipp <nathanael@philipp.land>" >> build/package/DEBIAN/control
 	$(Q)echo "Homepage: https://github.com/jnphilipp/backup" >> build/package/DEBIAN/control

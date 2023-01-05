@@ -40,10 +40,6 @@ from time import sleep
 from threading import Thread
 from typing import Dict, List, Optional, Set, TextIO, Tuple, Type, TypeVar, Union
 
-try:
-    import notify2
-except ImportError:
-    pass
 
 __author__ = "J. Nathanael Philipp (jnphilipp)"
 __copyright__ = "Copyright 2019-2023 J. Nathanael Philipp (jnphilipp)"
@@ -575,19 +571,6 @@ def to_bool(string: str, default: bool = False) -> bool:
         return default
 
 
-def send_notification(msg: str):
-    """Send a notification with notify2.
-
-    Args:
-     * msg: message of the notification
-    """
-    try:
-        n = notify2.Notification("backup", msg, "backup")
-        n.show()
-    except NameError:
-        pass
-
-
 def timestamp() -> str:
     """Get current timestamp as string.
 
@@ -821,12 +804,6 @@ if __name__ == "__main__":
         help="logging format.",
     )
     parser.add_argument(
-        "-n",
-        "--notify",
-        action="store_true",
-        help="send notifications for pipeline steps",
-    )
-    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="dry run.",
@@ -862,12 +839,6 @@ if __name__ == "__main__":
             ],
         )
 
-    if args.notify:
-        try:
-            notify2.init("backup")
-        except NameError:
-            args.notify = False
-
     pipeline: Dict[int, str] = {}
     if args.XML is not None:
         if args.check_valid:
@@ -888,25 +859,8 @@ if __name__ == "__main__":
 
     if not args.snapshot_only:
         for k, v in sorted(pipeline.items(), key=lambda x: x[0]):
-            if (
-                (args.notify and v not in ["postgresql-dbs", "mysqls"])
-                or (
-                    args.notify
-                    and v == "postgresql-dbs"
-                    and not (args.postgres or args.database)
-                )
-                or (
-                    args.notify
-                    and v == "mysql-dbs"
-                    and not (args.mysql or args.database)
-                )
-            ):
-                send_notification(f"Starting with {v} step.")
-
             if v == "backup":
                 for source in sources:
-                    if args.notify:
-                        send_notification(f"Starting backup of {source.path}")
                     source.backup(args.dry_run)
             elif v == "postgresql-dbs" and not (args.postgres or args.database):
                 for pgsql in pgsqls:
@@ -919,8 +873,6 @@ if __name__ == "__main__":
                 scripts[int(v[7:])].run(args.dry_run)
 
     if args.snapshot or args.snapshot_only:
-        if args.notify:
-            send_notification("Taking a snapshot.")
         snapshot(sources)
 
     logging.info("Backup complete.")
