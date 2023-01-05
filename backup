@@ -84,6 +84,7 @@ class Database:
     password: Optional[str] = None
     options: Optional[str] = None
     ssh: Optional[str] = None
+    ssh_args: List[str] = field(default_factory=list)
     target: Optional[Path] = None
 
     @classmethod
@@ -111,7 +112,11 @@ class Database:
         if e.find("p:options", namespaces=NAMESPACE) is not None:
             db.options = e.find("p:options", namespaces=NAMESPACE).text.strip()
         if e.find("p:ssh", namespaces=NAMESPACE) is not None:
-            db.ssh = e.find("p:ssh", namespaces=NAMESPACE).text.strip()
+            ssh = e.find("p:ssh", namespaces=NAMESPACE)
+            db.ssh = ssh.text.strip()
+            db.ssh_args = (
+                shlex.split(ssh.attrib["args"]) if "args" in ssh.attrib else []
+            )
 
         return db
 
@@ -158,9 +163,9 @@ class PostgreSQL(Database):
         if self.ssh is None:
             args: List[str] = []
         elif password is None:
-            args = ["ssh", self.ssh]
+            args = ["ssh", self.ssh] + self.ssh_args
         else:
-            args = ["ssh", self.ssh, f"PGPASSWORD={password}"]
+            args = ["ssh", self.ssh] + self.ssh_args + [f"PGPASSWORD={password}"]
         args.append("pg_dump")
         args.append(f"--username={self.user}")
         if self.options is not None:
@@ -218,9 +223,9 @@ class MySQL(Database):
         if self.ssh is None:
             args: List[str] = []
         elif password is None:
-            args = ["ssh", self.ssh]
+            args = ["ssh", self.ssh] + self.ssh_args
         else:
-            args = ["ssh", self.ssh, f"MYSQL_PWD={password}"]
+            args = ["ssh", self.ssh] + self.ssh_args + [f"MYSQL_PWD={password}"]
         args.append("mysqldump")
         args.append(f"--user={self.user}")
         if self.options is not None:

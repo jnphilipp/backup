@@ -147,7 +147,15 @@
             <xs:element name="user" type="xs:string"/>
             <xs:element name="password" type="xs:string" minOccurs="0"/>
             <xs:element name="options" type="xs:string" minOccurs="0"/>
-            <xs:element name="ssh" type="xs:string" minOccurs="0"/>
+            <xs:element name="ssh" type="p:sshType" minOccurs="0"/>
         </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="sshType">
+        <xs:simpleContent>
+            <xs:extension base="xs:string">
+                <xs:attribute name="args" type="xs:string" use="optional"/>
+            </xs:extension>
+        </xs:simpleContent>
     </xs:complexType>
 </xs:schema>
