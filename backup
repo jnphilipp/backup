@@ -289,7 +289,6 @@ class Script:
     path: Path
     args: List[str]
     cwd: Optional[Path]
-    as_root: bool
 
     @classmethod
     def from_xml(
@@ -297,7 +296,6 @@ class Script:
         e: etree.Element,
         cwd: Optional[Path] = None,
         cmd: Union[Tuple[Tool, List[str]], List[str]] = [],
-        default_as_root: bool = False,
         **kwargs,
     ) -> T:
         """Create Script from XML.
@@ -306,7 +304,6 @@ class Script:
          * e: XML Element
          * cwd: path to working dir to run from
          * cmd: default list of arguments if not otherwise specified.
-         * default_as_root: default as root if not otherwise specified.
 
         Returns:
          * Instance of script.
@@ -314,23 +311,15 @@ class Script:
         assert isinstance(cmd, list)
 
         path = Path(e.find("p:command", namespaces=NAMESPACE).text.strip())
-        as_root = (
-            to_bool(e.attrib["root"].strip(), False)
-            if "root" in e.attrib
-            else default_as_root
-        )
         if e.find("p:args", namespaces=NAMESPACE) is not None:
             args = shlex.split(e.find("p:args", namespaces=NAMESPACE).text.strip())
         else:
             args = cmd
-        return cls(path, args, cwd, as_root)
+        return cls(path, args, cwd)
 
     def build_command_args(self, dry_run: bool = False) -> List[str]:
         """Build cmd command arguments."""
-        if self.as_root:
-            return ["sudo", str(self.path)] + self.args
-        else:
-            return [str(self.path)] + self.args
+        return [str(self.path)] + self.args
 
     def run(self, dry_run: bool = False):
         """Run."""
@@ -400,7 +389,6 @@ class Source(Script):
         e: etree.Element,
         cwd: Optional[Path] = None,
         cmd: Union[Tuple[Tool, List[str]], List[str]] = [],
-        default_as_root: bool = False,
         **kwargs,
     ) -> T:
         """Create Script from XML.
@@ -409,7 +397,6 @@ class Source(Script):
          * e: XML Element
          * cwd: path to working dir to run from
          * cmd: backup tool, an instance of the Tool enum.
-         * as_root: default as root if not otherwise specified.
 
         Returns:
          * Instance of script.
@@ -437,7 +424,6 @@ class Source(Script):
             path=Path(path.text.strip()),
             args=cmd[1],
             cwd=None,
-            as_root=default_as_root,
             host=host,
             target=target,
         )
@@ -491,8 +477,6 @@ class Source(Script):
             target.mkdir(parents=True, exist_ok=True)
 
         cmd = [self.tool.value]
-        if self.as_root:
-            cmd = ["sudo"] + cmd
         for arg in self.args:
             if self.tool == Tool.TAR:
                 if arg in ["-z", "--gzip", "--gunzip", "--ungzip"]:
@@ -617,7 +601,6 @@ def load(
 def parse(
     path: Union[Path, TextIO],
     target: Optional[Path] = None,
-    as_root: Optional[bool] = None,
     default_tool: Optional[Tool] = None,
     default_config: Optional[List[str]] = None,
 ) -> Tuple[
@@ -646,9 +629,6 @@ def parse(
     if default_config is not None:
         config = default_config
 
-    if as_root is None and "root" in e.attrib:
-        as_root = to_bool(e.attrib["root"].strip(), False)
-
     if (
         target is None
         and doc.find("p:options/p:target", namespaces=NAMESPACE) is not None
@@ -673,7 +653,6 @@ def parse(
             Source.from_xml(
                 e,
                 cmd=(tool, config),
-                default_as_root=False if as_root is None else as_root,
                 default_target=target,
                 scripts=scripts,
             )
@@ -695,7 +674,6 @@ def parse(
         values = parse(
             npath,
             target,
-            as_root=to_bool(e.attrib["root"], False) if "root" in e.attrib else as_root,
             default_tool=tool,
             default_config=config,
         )
@@ -712,15 +690,11 @@ def snapshot(sources: List[Source]):
     Args:
      * sources: list of sources to include in the snapshot
     """
-    base_dirs: Dict[Path, bool] = {}
+    base_dirs: Set[Path] = set()
     for source in sources:
-        base_dir = source.target / source.hostname
-        if base_dir not in base_dirs:
-            base_dirs[base_dir] = source.as_root
-        elif not base_dirs[base_dir]:
-            base_dirs[base_dir] = source.as_root
+        base_dirs.add(source.target / source.hostname)
 
-    for base_dir, as_root in base_dirs.items():
+    for base_dir in base_dirs:
         logging.info(f"Taking snapshot of: {base_dir}")
 
         snapshot_dir = base_dir / "snapshots"
@@ -736,7 +710,6 @@ def snapshot(sources: List[Source]):
             ]
             + [file.name for file in files_dir.iterdir()],
             cwd=files_dir,
-            as_root=as_root,
         )
         tar.run()
 

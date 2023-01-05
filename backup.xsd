@@ -23,7 +23,7 @@
         <xs:attribute name="name" use="required">
             <xs:simpleType>
                 <xs:restriction base="xs:string">
-                    <xs:pattern value="duplicity|rsync|tar"/>
+                    <xs:pattern value="rsync|tar"/>
                 </xs:restriction>
             </xs:simpleType>
         </xs:attribute>
@@ -41,10 +41,6 @@
             <xs:enumeration value="off"/>
         </xs:restriction>
     </xs:simpleType>
-
-    <xs:attributeGroup name="root">
-        <xs:attribute name="root" type="p:BooleanType" use="optional"/>
-    </xs:attributeGroup>
 
     <xs:complexType name="backupType">
         <xs:choice>
@@ -68,7 +64,6 @@
         <xs:simpleContent>
             <xs:extension base="xs:string">
                 <xs:attributeGroup ref="p:name"/>
-                <xs:attributeGroup ref="p:root"/>
             </xs:extension>
         </xs:simpleContent>
     </xs:complexType>
@@ -103,7 +98,6 @@
         <xs:simpleContent>
             <xs:extension base="xs:string">
                 <xs:attribute name="name" type="xs:string" use="required"/>
-                <xs:attributeGroup ref="p:root"/>
                 <xs:attribute name="id" type="xs:integer" use="required"/>
             </xs:extension>
         </xs:simpleContent>
@@ -111,17 +105,9 @@
 
     <xs:complexType name="sourcesType">
         <xs:sequence>
-            <xs:element name="file" type="p:fileType" minOccurs="0" maxOccurs="unbounded"/>
+            <xs:element name="file" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
             <xs:element name="source" type="p:sourceType" minOccurs="0" maxOccurs="unbounded"/>
         </xs:sequence>
-    </xs:complexType>
-
-    <xs:complexType name="fileType">
-        <xs:simpleContent>
-            <xs:extension base="xs:string">
-                <xs:attributeGroup ref="p:root"/>
-            </xs:extension>
-        </xs:simpleContent>
     </xs:complexType>
 
     <xs:complexType name="sourceType">
