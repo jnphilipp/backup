@@ -146,7 +146,6 @@
             <xs:element name="name" type="xs:string"/>
             <xs:element name="user" type="xs:string"/>
             <xs:element name="password" type="xs:string" minOccurs="0"/>
-            <xs:element name="pass" type="xs:string" minOccurs="0"/>
             <xs:element name="options" type="xs:string" minOccurs="0"/>
             <xs:element name="ssh" type="xs:string" minOccurs="0"/>
         </xs:sequence>

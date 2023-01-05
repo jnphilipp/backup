@@ -82,7 +82,6 @@ class Database:
     name: str
     user: str
     password: Optional[str] = None
-    passwordstore: Optional[str] = None
     options: Optional[str] = None
     ssh: Optional[str] = None
     target: Optional[Path] = None
@@ -105,8 +104,6 @@ class Database:
 
         if e.find("p:password", namespaces=NAMESPACE) is not None:
             db.password = e.find("p:password", namespaces=NAMESPACE).text.strip()
-        if e.find("p:pass", namespaces=NAMESPACE) is not None:
-            db.passwordstore = e.find("p:pass", namespaces=NAMESPACE).text.strip()
         if e.find("p:target", namespaces=NAMESPACE) is not None:
             db.target = e.find("p:target", namespaces=NAMESPACE).text.strip()
         else:
@@ -119,17 +116,7 @@ class Database:
         return db
 
     def _get_password(self) -> Optional[str]:
-        if self.password is not None:
-            return self.password
-        elif self.passwordstore is not None:
-            logging.debug(f"Get password {self.passwordstore} from pass.")
-            pobj = subprocess.Popen(
-                ["pass", self.passwordstore], stdout=subprocess.PIPE
-            )
-            self.password = pobj.communicate()[0].decode("utf-8").split("\n")[0]
-            return self.password
-        else:
-            return None
+        return self.password
 
     def _run(
         self, args: List[str], env: Dict[str, str], target: Path
