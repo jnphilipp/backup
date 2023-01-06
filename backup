@@ -577,10 +577,10 @@ def load(
     xmlschema = etree.XMLSchema(etree.parse(schema_path))
 
     if not xmlschema.validate(doc):
-        logging.error(
+        logging.critical(
             f"XML file {path if isinstance(path, Path) else path.name} is not valid."
         )
-        logging.error(xmlschema.error_log.last_error)
+        logging.critical(xmlschema.error_log.last_error)
         return None
     else:
         logging.debug(
@@ -705,6 +705,15 @@ def snapshot(sources: List[Source]):
         tar.run()
 
 
+def filter_info(rec: logging.LogRecord) -> bool:
+    """Log record filter for info and lower levels.
+
+    Args:
+     * rec: LogRecord object
+    """
+    return rec.levelno <= logging.INFO
+
+
 if __name__ == "__main__":
     parser = ArgumentParser(prog="backup", formatter_class=ArgFormatter)
     parser.add_argument(
@@ -796,10 +805,20 @@ if __name__ == "__main__":
     else:
         level = logging.DEBUG
 
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setLevel(logging.DEBUG)
+    stdout_handler.addFilter(filter_info)
+
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setLevel(logging.WARNING)
+    if "%(levelname)s" not in args.log_format:
+        stderr_handler.setFormatter(
+            logging.Formatter(f"[%(levelname)s] {args.log_format}")
+        )
     logging.basicConfig(
         format=args.log_format,
         level=level,
-        handlers=[logging.StreamHandler(sys.stdout)],
+        handlers=[stdout_handler, stderr_handler],
     )
 
     pipeline: Dict[int, str] = {}
@@ -814,7 +833,10 @@ if __name__ == "__main__":
             if args.TARGET:
                 logging.info(f"Using '{args.TARGET}' as backup target.")
                 if not args.TARGET.exists():
-                    logging.error("The given target path does not exists.")
+                    logging.log(
+                        logging.WARN if args.dry_run else logging.CRITICAL,
+                        "The given target path does not exists.",
+                    )
                     if not args.dry_run:
                         sys.exit(1)
 
