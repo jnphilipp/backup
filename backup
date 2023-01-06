@@ -807,7 +807,9 @@ if __name__ == "__main__":
         if args.check_valid:
             if load(args.XML) is not None:
                 logging.info(f"XML file {args.XML.name} is valid.")
-            sys.exit(0)
+                sys.exit(0)
+            else:
+                sys.exit(1)
         else:
             if args.TARGET:
                 logging.info(f"Using '{args.TARGET}' as backup target.")
