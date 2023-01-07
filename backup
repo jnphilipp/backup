@@ -69,6 +69,7 @@ class ArgFormatter(ArgumentDefaultsHelpFormatter, RawTextHelpFormatter):
 class Tool(str, Enum):
     """Supported backup tools."""
 
+    DUPLICITY = "duplicity"
     RSYNC = "rsync"
     TAR = "tar"
 
@@ -358,7 +359,7 @@ class Source(Script):
     tool: Tool
     target: Path
     host: Optional[str] = None
-    excludes: Set[str] = field(default_factory=set)
+    excludes_includes: List[str] = field(default_factory=list)
     pre_script: Optional[Script] = None
     post_script: Optional[Script] = None
 
@@ -419,11 +420,10 @@ class Source(Script):
             target=target,
         )
 
-        if e.find("p:exclude", namespaces=NAMESPACE) is not None:
-            excludes = set()
-            for exclude in e.iterfind("p:exclude", namespaces=NAMESPACE):
-                excludes.add(exclude.text.strip())
-            source.excludes = excludes
+        excludes_includes = []
+        for i in e.xpath("p:exclude|p:include", namespaces=NAMESPACE):
+            excludes_includes.append(f"--{etree.QName(i).localname}={i.text.strip()}")
+        source.excludes_includes = excludes_includes
 
         if e.find("p:pre_script", namespaces=NAMESPACE) is not None:
             source.pre_script = scripts[
@@ -452,7 +452,7 @@ class Source(Script):
         backup_dir = self.target / self.hostname / "backup"
 
         snapshot = None
-        if self.tool == Tool.RSYNC:
+        if self.tool == Tool.RSYNC or self.tool == Tool.DUPLICITY:
             target = target / path.relative_to(target.anchor)
             backup_dir = backup_dir / path.relative_to(backup_dir.anchor)
         elif self.tool == Tool.TAR:
@@ -494,8 +494,7 @@ class Source(Script):
                 cmd += [arg % snapshot]
             else:
                 cmd += [arg]
-        for exclude in self.excludes:
-            cmd += [f"--exclude={exclude}"]
+        cmd += self.excludes_includes
 
         source = str(self.path)
         if self.host:
@@ -503,7 +502,12 @@ class Source(Script):
         elif self.path.is_dir():
             source = f"{self.path}{'/' if self.tool == Tool.RSYNC else ''}"
 
-        if self.tool == Tool.RSYNC:
+        if self.tool == Tool.DUPLICITY:
+            return cmd + [
+                source,
+                f"file://{str(target.absolute())}",
+            ]
+        elif self.tool == Tool.RSYNC:
             return cmd + [
                 source,
                 str(target.absolute()),

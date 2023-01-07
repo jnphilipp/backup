@@ -23,7 +23,7 @@
         <xs:attribute name="name" use="required">
             <xs:simpleType>
                 <xs:restriction base="xs:string">
-                    <xs:pattern value="rsync|tar"/>
+                    <xs:pattern value="duplicity|rsync|tar"/>
                 </xs:restriction>
             </xs:simpleType>
         </xs:attribute>
@@ -113,7 +113,10 @@
     <xs:complexType name="sourceType">
         <xs:sequence>
             <xs:element name="path" type="p:pathType"/>
-            <xs:element name="exclude" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+            <xs:choice minOccurs="0" maxOccurs="unbounded">
+                <xs:element name="exclude" type="xs:string"/>
+                <xs:element name="include" type="xs:string"/>
+            </xs:choice>
             <xs:element name="pre_script" type="xs:integer" minOccurs="0"/>
             <xs:element name="post_script" type="xs:integer" minOccurs="0"/>
         </xs:sequence>

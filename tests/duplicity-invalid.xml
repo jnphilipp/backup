@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<backup xmlns="https://github.com/jnphilipp/backup/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://github.com/jnphilipp/backup/ https://raw.githubusercontent.com/jnphilipp/backup/master/backup.xsd">
+    <tool name="duplicity">--rsync-options"--delete --delete-excluded --stats -abuchvz"</tool>
+    <sources>
+        <source>
+            <exclude>**/.cache</exclude>
+            <exclude>**/venv</exclude>
+            <exclude>**/.venv</exclude>
+            <exclude>**/__pycache__</exclude>
+            <exclude>**/.mypy_cache</exclude>
+            <include>/boot</include>
+            <include>/var</include>
+            <exclude>/var/crash</exclude>
+            <exclude>/var/tmp</exclude>
+            <exclude>/var/log</exclude>
+            <exclude>/var/spool</exclude>
+            <include>/etc</include>
+            <exclude>**</exclude>
+            <path>/</path>
+        </source>
+    </sources>
+    <pipeline>
+        <step no="1">backup</step>
+    </pipeline>
+</backup>
