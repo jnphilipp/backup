@@ -23,7 +23,7 @@
         <xs:attribute name="name" use="required">
             <xs:simpleType>
                 <xs:restriction base="xs:string">
-                    <xs:pattern value="duplicity|rsync|tar"/>
+                    <xs:pattern value="borg|duplicity|rsync|tar"/>
                 </xs:restriction>
             </xs:simpleType>
         </xs:attribute>
@@ -116,6 +116,7 @@
             <xs:choice minOccurs="0" maxOccurs="unbounded">
                 <xs:element name="exclude" type="xs:string"/>
                 <xs:element name="include" type="xs:string"/>
+                <xs:element name="pattern" type="xs:string"/>
             </xs:choice>
             <xs:element name="pre_script" type="xs:integer" minOccurs="0"/>
             <xs:element name="post_script" type="xs:integer" minOccurs="0"/>
@@ -125,7 +126,9 @@
     <xs:complexType name="pathType">
         <xs:simpleContent>
             <xs:extension base="xs:string">
-                <xs:attribute name="host" type="xs:string" use="optional"/>
+                <xs:attribute name="ssh" type="xs:string" use="optional"/>
+                <xs:attribute name="sshfs" type="xs:string" use="optional"/>
+                <xs:attribute name="sshfs-args" type="xs:string" use="optional"/>
             </xs:extension>
         </xs:simpleContent>
     </xs:complexType>

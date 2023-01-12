@@ -36,6 +36,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from lxml import etree
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from time import sleep
 from threading import Thread
 from typing import Dict, List, Optional, Set, TextIO, Tuple, Type, TypeVar, Union
@@ -66,9 +67,34 @@ class ArgFormatter(ArgumentDefaultsHelpFormatter, RawTextHelpFormatter):
     pass
 
 
+class SshfsTemporaryDirectory(TemporaryDirectory):
+    """Mounts a directory with sshfs into a temporary directory."""
+
+    def __init__(
+        self,
+        host: str,
+        path: Union[str, Path],
+        args: List[str] = [],
+        dry_run: bool = False,
+    ):
+        """Create temporary directory and mount a diretory with sshfs."""
+        super().__init__(prefix="backup-")
+        self.dry_run = dry_run
+
+        logging.info(f"Mounting {host}:{path:s} into {self.name}.")
+        Script("sshfs", args + [f"{host}:{path:s}", self.name], None).run(self.dry_run)
+
+    def cleanup(self):
+        """Dismount and clean up temporary directory."""
+        logging.info(f"Dismounting {self.name}.")
+        Script("fusermount3", ["-u", self.name], None).run(self.dry_run)
+        super().cleanup()
+
+
 class Tool(str, Enum):
     """Supported backup tools."""
 
+    BORG = "borg"
     DUPLICITY = "duplicity"
     RSYNC = "rsync"
     TAR = "tar"
@@ -279,7 +305,7 @@ class Script:
 
     T = TypeVar("T", bound="Script")
 
-    path: Path
+    path: Union[str, Path]
     args: List[str]
     cwd: Optional[Path]
 
@@ -303,7 +329,7 @@ class Script:
         """
         assert isinstance(cmd, list)
 
-        path = Path(e.find("p:command", namespaces=NAMESPACE).text.strip())
+        path = e.find("p:command", namespaces=NAMESPACE).text.strip()
         if e.find("p:args", namespaces=NAMESPACE) is not None:
             args = shlex.split(e.find("p:args", namespaces=NAMESPACE).text.strip())
         else:
@@ -319,11 +345,16 @@ class Script:
 
         def log(stream, level, writer):
             while True:
-                line = stream.readline().decode()
+                line = stream.readline()
                 if line:
                     logging.log(level, line.split("\r")[-1].rstrip())
                 else:
                     break
+
+        try:
+            self.pre_run(dry_run)
+        except NotImplementedError:
+            pass
 
         args = self.build_command_args(dry_run)
         cmd = '" "'.join(args)
@@ -335,11 +366,20 @@ class Script:
             logging.info(f"with the working directory: {self.cwd}")
         else:
             pobj = subprocess.Popen(
-                args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=self.cwd
+                args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=self.cwd,
+                text=True,
             )
 
             t_stdout = Thread(target=log, args=(pobj.stdout, 15, sys.stdout))
-            t_stderr = Thread(target=log, args=(pobj.stderr, logging.ERROR, sys.stderr))
+            if str(self.path) == Tool.BORG.value:
+                t_stderr = Thread(target=log, args=(pobj.stderr, 15, sys.stderr))
+            else:
+                t_stderr = Thread(
+                    target=log, args=(pobj.stderr, logging.ERROR, sys.stderr)
+                )
 
             t_stdout.start()
             t_stderr.start()
@@ -348,6 +388,19 @@ class Script:
                 pass
             pobj.wait()
             sleep(1)
+
+        try:
+            self.post_run(dry_run)
+        except NotImplementedError:
+            pass
+
+    def pre_run(self, dry_run: bool = False):
+        """Will be executed as the first thing in run."""
+        raise NotImplementedError()
+
+    def post_run(self, dry_run: bool = False):
+        """Will be executed as the last thing in run."""
+        raise NotImplementedError()
 
 
 @dataclass
@@ -358,20 +411,25 @@ class Source(Script):
 
     tool: Tool
     target: Path
-    host: Optional[str] = None
+    ssh: Optional[str] = None
+    sshfs: Optional[str] = None
+    sshfs_args: List[str] = field(default_factory=list)
     excludes_includes: List[str] = field(default_factory=list)
     pre_script: Optional[Script] = None
     post_script: Optional[Script] = None
+    _sshfs_tmpdir: Optional[SshfsTemporaryDirectory] = None
 
     @property
     def hostname(self) -> str:
-        """Get the hostname either from self.host or from socket.gethostname.
+        """Get the hostname either from self.host/self.sshfs or from socket.gethostname.
 
         Returns:
          * hostname
         """
-        if self.host:
-            return self.host
+        if self.ssh:
+            return self.ssh
+        elif self.sshfs:
+            return self.sshfs
         else:
             return socket.gethostname()
 
@@ -401,7 +459,13 @@ class Source(Script):
         scripts = kwargs["scripts"] if "scripts" in kwargs else {}
 
         path = e.find("p:path", namespaces=NAMESPACE)
-        host = path.attrib["host"] if "host" in path.attrib else None
+        ssh = path.attrib["ssh"] if "ssh" in path.attrib else None
+        sshfs = path.attrib["sshfs"] if "sshfs" in path.attrib else None
+        sshfs_args = (
+            shlex.split(path.attrib["sshfs-args"])
+            if "sshfs-args" in path.attrib
+            else []
+        )
 
         if e.find("p:target", namespaces=NAMESPACE) is not None:
             target = Path(e.find("p:target", namespaces=NAMESPACE).text.strip())
@@ -416,13 +480,22 @@ class Source(Script):
             path=Path(path.text.strip()),
             args=cmd[1],
             cwd=None,
-            host=host,
+            ssh=ssh,
+            sshfs=sshfs,
+            sshfs_args=sshfs_args,
             target=target,
         )
 
         excludes_includes = []
-        for i in e.xpath("p:exclude|p:include", namespaces=NAMESPACE):
-            excludes_includes.append(f"--{etree.QName(i).localname}={i.text.strip()}")
+        for i in e.xpath("p:exclude|p:include|p:pattern", namespaces=NAMESPACE):
+            name = etree.QName(i).localname
+            if source.tool == Tool.BORG and name == "include":
+                logging.critical("The include-tag is not supported with borg.")
+                sys.exit(1)
+            elif source.tool != Tool.BORG and name == "pattern":
+                logging.critical("The include-tag is not supported with borg.")
+                sys.exit(1)
+            excludes_includes.append(f"--{name}={i.text.strip()}")
         source.excludes_includes = excludes_includes
 
         if e.find("p:pre_script", namespaces=NAMESPACE) is not None:
@@ -436,10 +509,35 @@ class Source(Script):
 
         return source
 
+    def pre_run(self, dry_run: bool = False):
+        """Will be executed as the first thing in run."""
+        if self.sshfs is not None and self._sshfs_tmpdir is None:
+            self._sshfs_tmpdir = SshfsTemporaryDirectory(
+                self.sshfs, self.path, self.sshfs_args, dry_run
+            )
+        if self.pre_script is not None:
+            logging.info(f"Run pre-script {self.pre_script.path}.")
+            self.pre_script.run(dry_run)
+
+    def post_run(self, dry_run: bool = False):
+        """Will be executed as the last thing in run."""
+        if self.post_script is not None:
+            logging.info(f"Run post-script {self.post_script.path}.")
+            self.post_script.run(dry_run)
+        if self._sshfs_tmpdir is not None:
+            self._sshfs_tmpdir.cleanup()
+            self._sshfs_tmpdir = None
+
     def build_command_args(self, dry_run: bool = False) -> List[str]:
         """Build command line arguments."""
-        if self.host:
-            logging.info(f"Backup remote source {self.host}:{self.path}.")
+        if isinstance(self.path, str):
+            self.path = Path(self.path)
+
+        if self.ssh:
+            logging.info(f"Backup remote source {self.ssh}:{self.path}.")
+            path = self.path
+        elif self.sshfs:
+            logging.info(f"Backup sshfs source {self.sshfs}:{self.path}.")
             path = self.path
         else:
             logging.info(f"Backup local source {self.path}.")
@@ -448,11 +546,24 @@ class Source(Script):
             else:
                 path = self.path.parent
 
-        target = self.target / self.hostname / "files"
+        target: Path = self.target / self.hostname / "files"
         backup_dir = self.target / self.hostname / "backup"
 
         snapshot = None
-        if self.tool == Tool.RSYNC or self.tool == Tool.DUPLICITY:
+        if self.tool == Tool.BORG:
+            if path.name == "" and self.ssh is None and self.sshfs is None:
+                backup_name = "{hostname}-{now}"
+            elif path.name == "" and self.ssh is not None:
+                backup_name = f"{self.ssh}-{{now}}"
+            elif path.name == "" and self.sshfs is not None:
+                backup_name = f"{self.sshfs}-{{now}}"
+            elif self.ssh is not None:
+                backup_name = f"{self.ssh}:{path.name}-{{now}}"
+            elif self.sshfs is not None:
+                backup_name = f"{self.sshfs}:{path.name}-{{now}}"
+            else:
+                backup_name = f"{{hostname}}:{path.name}-{{now}}"
+        elif self.tool == Tool.DUPLICITY or self.tool == Tool.RSYNC:
             target = target / path.relative_to(target.anchor)
             backup_dir = backup_dir / path.relative_to(backup_dir.anchor)
         elif self.tool == Tool.TAR:
@@ -466,8 +577,17 @@ class Source(Script):
 
         if not target.exists() and not dry_run:
             target.mkdir(parents=True, exist_ok=True)
+            if self.tool == Tool.BORG:
+                logging.info(f"Initializing borg repository in {path.absolute()}.")
+                Script(
+                    self.tool.value,
+                    ["init", "--encryption", "repokey", str(target.absolute())],
+                    None,
+                ).run()
 
         cmd = [self.tool.value]
+        if self.tool == Tool.BORG:
+            cmd += ["create"]
         for arg in self.args:
             if self.tool == Tool.TAR:
                 if arg in ["-z", "--gzip", "--gunzip", "--ungzip"]:
@@ -496,13 +616,22 @@ class Source(Script):
                 cmd += [arg]
         cmd += self.excludes_includes
 
-        source = str(self.path)
-        if self.host:
-            source = f"{self.host}:{self.path}{'/' if self.tool == Tool.RSYNC else ''}"
+        if self.ssh is not None:
+            source = f"{self.ssh}:{self.path}{'/' if self.tool == Tool.RSYNC else ''}"
+        elif self.sshfs is not None and self._sshfs_tmpdir is not None:
+            source = "."
+            self.cwd = self._sshfs_tmpdir.name
         elif self.path.is_dir():
             source = f"{self.path}{'/' if self.tool == Tool.RSYNC else ''}"
+        else:
+            source = str(self.path)
 
-        if self.tool == Tool.DUPLICITY:
+        if self.tool == Tool.BORG:
+            return cmd + [
+                f"{target.absolute()}::{backup_name}",
+                source,
+            ]
+        elif self.tool == Tool.DUPLICITY:
             return cmd + [
                 source,
                 f"file://{str(target.absolute())}",
@@ -523,13 +652,7 @@ class Source(Script):
 
     def backup(self, dry_run: bool = False):
         """Make backup."""
-        if self.pre_script is not None:
-            logging.info(f"Run pre-script {self.pre_script.path}.")
-            self.pre_script.run(dry_run)
         self.run(dry_run)
-        if self.post_script is not None:
-            logging.info(f"Run post-script {self.post_script.path}.")
-            self.post_script.run(dry_run)
 
 
 def to_bool(string: str, default: bool = False) -> bool:
@@ -585,6 +708,29 @@ def load(
             f"XML file {path if isinstance(path, Path) else path.name} is not valid."
         )
         logging.critical(xmlschema.error_log.last_error)
+        return None
+    elif doc.xpath("//p:path[@ssh and @sshfs]", namespaces=NAMESPACE):
+        logging.critical(
+            f"XML file {path if isinstance(path, Path) else path.name} is not valid."
+        )
+        logging.critical(
+            "Currently it is only supported that a path element has either the "
+            "attribute ssh or sshfs."
+        )
+        return None
+    elif doc.xpath("//p:tool[@name = 'borg'] and //p:include", namespaces=NAMESPACE):
+        logging.critical(
+            f"XML file {path if isinstance(path, Path) else path.name} is not valid."
+        )
+        logging.critical("Borg does not support include, use pattern.")
+        return None
+    elif doc.xpath(
+        "not(//p:tool[@name = 'borg']) and //p:pattern", namespaces=NAMESPACE
+    ):
+        logging.critical(
+            f"XML file {path if isinstance(path, Path) else path.name} is not valid."
+        )
+        logging.critical("pattern can only be used with borg.")
         return None
     else:
         logging.debug(

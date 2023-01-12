@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<backup xmlns="https://github.com/jnphilipp/backup/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://github.com/jnphilipp/backup/ https://raw.githubusercontent.com/jnphilipp/backup/master/backup.xsd">
+    <tool name="borg">--verbose --list --stats --show-rc --compression zstd,11 --exclude-caches</tool>
+    <sources>
+        <source>
+            <path sshfs="USER@SERVER" sshfs-args="-F /home/USER/.ssh/config">/</path>
+            <exclude>*.pyc</exclude>
+            <exclude>**/.cache</exclude>
+            <exclude>**/venv</exclude>
+            <exclude>**/.venv</exclude>
+            <exclude>**/__pycache__</exclude>
+            <exclude>**/.mypy_cache</exclude>
+            <pattern>+boot</pattern>
+            <pattern>+etc</pattern>
+            <pattern>+home</pattern>
+            <pattern>+opt</pattern>
+            <pattern>!pp:proc</pattern>
+            <pattern>+root</pattern>
+            <pattern>+srv</pattern>
+            <pattern>!pp:tmp</pattern>
+            <pattern>!pp:usr</pattern>
+            <pattern>-var/**/logs</pattern>
+            <pattern>-pp:var/cache</pattern>
+            <pattern>-pp:var/crash</pattern>
+            <pattern>-pp:var/log</pattern>
+            <pattern>-pp:var/lock</pattern>
+            <pattern>-pp:var/run</pattern>
+            <pattern>-pp:var/spool</pattern>
+            <pattern>-pp:var/tmp</pattern>
+            <pattern>+var</pattern>
+            <pattern>+var/cache/debconf</pattern>
+            <pattern>-**</pattern>
+        </source>
+    </sources>
+    <pipeline>
+        <step no="1">backup</step>
+    </pipeline>
+</backup>
