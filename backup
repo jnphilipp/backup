@@ -20,6 +20,7 @@
 
 import gzip
 import logging
+import re
 import shlex
 import socket
 import subprocess
@@ -32,14 +33,13 @@ from argparse import (
     FileType,
     RawTextHelpFormatter,
 )
-from dataclasses import dataclass, field
 from enum import Enum
 from lxml import etree
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import sleep
 from threading import Thread
-from typing import Dict, List, Optional, Set, TextIO, Tuple, Type, TypeVar, Union
+from typing import Callable, Dict, List, Optional, Set, TextIO, Tuple, Union
 
 
 __author__ = "J. Nathanael Philipp (jnphilipp)"
@@ -61,36 +61,6 @@ VERSION = (
 NAMESPACE = {"p": "https://github.com/jnphilipp/backup/"}
 
 
-class ArgFormatter(ArgumentDefaultsHelpFormatter, RawTextHelpFormatter):
-    """Combination of ArgumentDefaultsHelpFormatter and RawTextHelpFormatter."""
-
-    pass
-
-
-class SshfsTemporaryDirectory(TemporaryDirectory):
-    """Mounts a directory with sshfs into a temporary directory."""
-
-    def __init__(
-        self,
-        host: str,
-        path: Union[str, Path],
-        args: List[str] = [],
-        dry_run: bool = False,
-    ):
-        """Create temporary directory and mount a diretory with sshfs."""
-        super().__init__(prefix="backup-")
-        self.dry_run = dry_run
-
-        logging.info(f"Mounting {host}:{path:s} into {self.name}.")
-        Script("sshfs", args + [f"{host}:{path:s}", self.name], None).run(self.dry_run)
-
-    def cleanup(self):
-        """Dismount and clean up temporary directory."""
-        logging.info(f"Dismounting {self.name}.")
-        Script("fusermount3", ["-u", self.name], None).run(self.dry_run)
-        super().cleanup()
-
-
 class Tool(str, Enum):
     """Supported backup tools."""
 
@@ -100,559 +70,420 @@ class Tool(str, Enum):
     TAR = "tar"
 
 
-@dataclass
-class Database:
-    """Dataclass for databases."""
+class ArgFormatter(ArgumentDefaultsHelpFormatter, RawTextHelpFormatter):
+    """Combination of ArgumentDefaultsHelpFormatter and RawTextHelpFormatter."""
 
-    T = TypeVar("T", bound="Database", covariant=True)
-
-    name: str
-    user: str
-    password: Optional[str] = None
-    options: Optional[str] = None
-    ssh: Optional[str] = None
-    ssh_args: List[str] = field(default_factory=list)
-    target: Optional[Path] = None
-
-    @classmethod
-    def from_xml(cls: Type[T], e: etree.Element, default_target: Optional[Path]) -> T:
-        """Create database from XML.
-
-        Args:
-         * e: XML Element
-         * default_target: default if not otherwise specified.
-
-        Returns:
-         * Instance of database.
-        """
-        db = cls(
-            name=e.find("p:name", namespaces=NAMESPACE).text.strip(),
-            user=e.find("p:user", namespaces=NAMESPACE).text.strip(),
-        )
-
-        if e.find("p:password", namespaces=NAMESPACE) is not None:
-            db.password = e.find("p:password", namespaces=NAMESPACE).text.strip()
-        if e.find("p:target", namespaces=NAMESPACE) is not None:
-            db.target = e.find("p:target", namespaces=NAMESPACE).text.strip()
-        else:
-            db.target = default_target
-        if e.find("p:options", namespaces=NAMESPACE) is not None:
-            db.options = e.find("p:options", namespaces=NAMESPACE).text.strip()
-        if e.find("p:ssh", namespaces=NAMESPACE) is not None:
-            ssh = e.find("p:ssh", namespaces=NAMESPACE)
-            db.ssh = ssh.text.strip()
-            db.ssh_args = (
-                shlex.split(ssh.attrib["args"]) if "args" in ssh.attrib else []
-            )
-
-        return db
-
-    def _get_password(self) -> Optional[str]:
-        return self.password
-
-    def _run(
-        self, args: List[str], env: Dict[str, str], target: Path
-    ) -> subprocess.Popen:
-        with gzip.open(target, "wt", encoding="utf8") as f:
-            pobj = subprocess.Popen(
-                args,
-                stdout=subprocess.PIPE,
-                env=env,
-                stderr=subprocess.PIPE,
-                encoding="utf8",
-            )
-
-            assert pobj.stdout is not None
-
-            for line in pobj.stdout:
-                f.write(line)
-
-            pobj.wait()
-            return pobj
-
-    def build_command_args(self) -> List[str]:
-        """Build cmd command arguments."""
-        raise NotImplementedError()
-
-    def backup(self, dry_run: bool = False):
-        """Make backup."""
-        raise NotImplementedError()
+    pass
 
 
-@dataclass
-class PostgreSQL(Database):
-    """Dataclass for PostgreSQL databases."""
+def thread_logging(
+    writer: Callable[[str], None], read_size: int = -1
+) -> Callable[[TextIO], None]:
+    """Create logging function for use in threads.
 
-    def build_command_args(self) -> List[str]:
-        """Build cmd command arguments."""
-        password = self._get_password()
+    Args:
+     * writer: function to write output to
+     * read_size: optional, length of bytes/chars to read at once
 
-        if self.ssh is None:
-            args: List[str] = []
-        elif password is None:
-            args = ["ssh", self.ssh] + self.ssh_args
-        else:
-            args = ["ssh", self.ssh] + self.ssh_args + [f"PGPASSWORD={password}"]
-        args.append("pg_dump")
-        args.append(f"--username={self.user}")
-        if self.options is not None:
-            args += self.options.split(" ")
-        args.append(self.name)
-        return args
+    Returns:
+     * function to give to threads
+    """
 
-    def backup(self, dry_run: bool = False):
-        """Make backup."""
-        env: Dict[str, str] = {}
-        if self.ssh is None:
-            s = self._get_password()
-            if s is not None:
-                env["PGPASSWORD"] = s
-
-        args = self.build_command_args()
-        cmd = '" "'.join(
-            ["PGPASSWORD" if a.startswith("PGPASSWORD") else a for a in args]
-        )
-        logging.info(f"Dumping PostgreSQL database {self.name}.")
-        logging.debug(f'Running PostgreSQL command: "{cmd}"')
-
-        hostname = self.ssh if self.ssh is not None else socket.gethostname()
-        path = Path(hostname) / "db-dumps" / "PostgreSQL" / self.name
-        if self.target is not None:
-            path = self.target / path
-        path = path.absolute()
-        if not path.exists() and not dry_run:
-            path.mkdir(parents=True, exist_ok=True)
-
-        path /= f"{self.name}_{timestamp()}.sql.gz"
-        logging.debug(f"Storing {self.name} dump in {path}.")
-
-        if dry_run:
-            logging.info(" ".join([f"{k}={v}" for k, v in env.items()]))
-            logging.info(" ".join(args))
-            logging.info(f"target={path}")
-        else:
-            pobj = self._run(args, env, path)
-            if pobj.returncode != 0:
-                if pobj.stderr is not None:
-                    err = pobj.stderr.read()
-                    logging.error(f"PostgreSQL {self.name} dump failed.")
-                    logging.error(err.strip())
-
-
-@dataclass
-class MySQL(Database):
-    """Dataclass for MySQL databases."""
-
-    def build_command_args(self) -> List[str]:
-        """Build cmd command arguments."""
-        password = self._get_password()
-
-        if self.ssh is None:
-            args: List[str] = []
-        elif password is None:
-            args = ["ssh", self.ssh] + self.ssh_args
-        else:
-            args = ["ssh", self.ssh] + self.ssh_args + [f"MYSQL_PWD={password}"]
-        args.append("mysqldump")
-        args.append(f"--user={self.user}")
-        if self.options is not None:
-            args += self.options.split(" ")
-        args.append(self.name)
-        return args
-
-    def backup(self, dry_run: bool = False):
-        """Make backup."""
-        env: Dict[str, str] = {}
-        if self.ssh is None:
-            s = self._get_password()
-            if s is not None:
-                env["MYSQL_PWD"] = s
-
-        args = self.build_command_args()
-        cmd = '" "'.join(
-            ["MYSQL_PWD" if a.startswith("MYSQL_PWD") else a for a in args]
-        )
-        logging.info(f"Dumping MySQL database {self.name}.")
-        logging.debug(f'Running MySQL command: "{cmd}"')
-
-        hostname = self.ssh if self.ssh is not None else socket.gethostname()
-        path = Path(hostname) / "db-dumps" / "MySQL" / self.name
-        if self.target is not None:
-            path = self.target / path
-        path = path.absolute()
-        if not path.exists() and not dry_run:
-            path.mkdir(parents=True, exist_ok=True)
-
-        path /= f"{self.name}_{timestamp()}.sql.gz"
-        logging.debug(f"Storing {self.name} dump in {path}.")
-
-        if dry_run:
-            logging.info(" ".join([f"{k}={v}" for k, v in env.items()]))
-            logging.info(" ".join(args))
-            logging.info(f"target={path}")
-        else:
-            pobj = self._run(args, env, path)
-            if pobj.returncode != 0:
-                if pobj.stderr is not None:
-                    err = pobj.stderr.read()
-                    logging.error(f"MySQL {self.name} dump failed.")
-                    logging.error(err.strip())
-
-
-@dataclass
-class Script:
-    """Dataclass for scripts."""
-
-    T = TypeVar("T", bound="Script")
-
-    path: Union[str, Path]
-    args: List[str]
-    cwd: Optional[Path]
-
-    @classmethod
-    def from_xml(
-        cls: Type[T],
-        e: etree.Element,
-        cwd: Optional[Path] = None,
-        cmd: Union[Tuple[Tool, List[str]], List[str]] = [],
-        **kwargs,
-    ) -> T:
-        """Create Script from XML.
-
-        Args:
-         * e: XML Element
-         * cwd: path to working dir to run from
-         * cmd: default list of arguments if not otherwise specified.
-
-        Returns:
-         * Instance of script.
-        """
-        assert isinstance(cmd, list)
-
-        path = e.find("p:command", namespaces=NAMESPACE).text.strip()
-        if e.find("p:args", namespaces=NAMESPACE) is not None:
-            args = shlex.split(e.find("p:args", namespaces=NAMESPACE).text.strip())
-        else:
-            args = cmd
-        return cls(path, args, cwd)
-
-    def build_command_args(self, dry_run: bool = False) -> List[str]:
-        """Build cmd command arguments."""
-        return [str(self.path)] + self.args
-
-    def run(self, dry_run: bool = False):
-        """Run."""
-
-        def log(stream, level, writer):
-            while True:
-                line = stream.readline()
-                if line:
-                    logging.log(level, line.split("\r")[-1].rstrip())
-                else:
-                    break
-
-        try:
-            self.pre_run(dry_run)
-        except NotImplementedError:
-            pass
-
-        args = self.build_command_args(dry_run)
-        cmd = '" "'.join(args)
-        logging.debug(f'Running: "{cmd}" with working directory {self.cwd}')
-
-        if dry_run:
-            logging.info("The following command would be run:")
-            logging.info(f'"{cmd}"')
-            logging.info(f"with the working directory: {self.cwd}")
-        else:
-            pobj = subprocess.Popen(
-                args,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                cwd=self.cwd,
-                text=True,
-            )
-
-            t_stdout = Thread(target=log, args=(pobj.stdout, 15, sys.stdout))
-            if str(self.path) == Tool.BORG.value:
-                t_stderr = Thread(target=log, args=(pobj.stderr, 15, sys.stderr))
+    def log(stream: TextIO):
+        while True:
+            line = stream.readline(read_size)
+            if line:
+                writer(line.split("\r")[-1].rstrip() if read_size == -1 else line)
             else:
-                t_stderr = Thread(
-                    target=log, args=(pobj.stderr, logging.ERROR, sys.stderr)
+                break
+
+    return log
+
+
+def run_command(
+    args: List[str],
+    cwd: Optional[str] = None,
+    env: Optional[Dict[str, str]] = None,
+    stdout_handler: Optional[Callable[[TextIO], None]] = thread_logging(
+        lambda s: logging.log(15, s)
+    ),
+    stderr_handler: Optional[Callable[[TextIO], None]] = thread_logging(
+        lambda s: logging.error(s)
+    ),
+) -> int:
+    """Run a command.
+
+    Args:
+     * args: command and arguments
+     * cwd: optional, current working directory to run from
+     * env: optional, environment variables
+     * stdout_handler: optional, function to handle stdout, run in a separate thread
+     * stderr_handler: optional, function to handle stderr, run in a separate thread
+
+    Returns:
+     * return code
+    """
+    pobj = subprocess.Popen(
+        args,
+        stdout=subprocess.PIPE if stdout_handler else None,
+        stderr=subprocess.PIPE if stderr_handler else None,
+        cwd=cwd,
+        env=env,
+        text=True,
+    )
+
+    t_stdout = Thread(target=stdout_handler, args=(pobj.stdout,))
+    t_stderr = Thread(target=stderr_handler, args=(pobj.stderr,))
+
+    t_stdout.start()
+    t_stderr.start()
+
+    while t_stdout.is_alive() and t_stderr.is_alive():
+        pass
+    pobj.wait()
+    sleep(1)
+
+    return pobj.returncode
+
+
+def make_db_dump_function(
+    e: etree.Element,
+    target: Path,
+    cwd: Optional[str],
+    env: Optional[Dict[str, str]],
+    dry_run: bool = False,
+) -> Callable[[], None]:
+    """Make a function to create a database dump.
+
+    Args:
+     * e: etree element, as basis for the database dump
+     * cwd: optional, current working directory to run from
+     * env: optional, environment variables
+     * dry_run: perform a dry run where no changes are performed
+
+    Returns:
+     * function to make database dump
+    """
+    logging.debug(f"Parsing XML element {e} for database.")
+
+    name = e.find("p:name", namespaces=NAMESPACE).text.strip()
+    user = e.find("p:user", namespaces=NAMESPACE).text.strip()
+    password = (
+        e.find("p:password", namespaces=NAMESPACE).text.strip()
+        if e.find("p:password", namespaces=NAMESPACE) is not None
+        else None
+    )
+    options = (
+        shlex.split(e.find("p:options", namespaces=NAMESPACE).text.strip())
+        if e.find("p:options", namespaces=NAMESPACE) is not None
+        else None
+    )
+    ssh = None
+    ssh_args = []
+    if e.find("p:ssh", namespaces=NAMESPACE) is not None:
+        essh = e.find("p:ssh", namespaces=NAMESPACE)
+        ssh = essh.text.strip()
+        ssh_args = shlex.split(essh.attrib["args"]) if "args" in essh.attrib else []
+
+    if ssh is None:
+        args: List[str] = []
+        target /= Path(socket.gethostname())
+    else:
+        args = ["ssh", ssh] + ssh_args
+        target /= Path(ssh)
+    target /= Path("db-dumps")
+
+    if etree.QName(e.getparent()).localname == "postgresql":
+        db_name = "PostgreSQL"
+        if ssh is not None:
+            args += [f"PGPASSWORD={password}"]
+        else:
+            if env is None:
+                env = {"PGPASSWORD": password}
+            else:
+                env["PGPASSWORD"] = password
+        args += ["pg_dump", f"--username={user}"]
+        target /= Path("PostgreSQL")
+    elif etree.QName(e.getparent()).localname == "mysql":
+        db_name = "MySQL"
+        if ssh is not None:
+            args += [f"MYSQL_PWD={password}"]
+        else:
+            if env is None:
+                env = {"MYSQL_PWD": password}
+            else:
+                env["MYSQL_PWD"] = password
+        args += ["mysqldump", f"--user={user}"]
+        target /= Path("MySQL")
+    else:
+        raise RuntimeError("Unkown database.")
+
+    if options is not None:
+        args += options
+    args.append(name)
+
+    target /= Path(name)
+    if not target.exists() and not dry_run:
+        target.mkdir(parents=True, exist_ok=True)
+    target /= f"{name}_{timestamp()}.sql.gz"
+
+    logging.debug(
+        f"{db_name}: name={name} user={user} password="
+        f"{None if password is None else '*' * 5} options={options} ssh={ssh} "
+        f"ssh-args={ssh_args} target={target}"
+    )
+
+    def dump():
+        if ssh is not None:
+            logging.info(f"Dumping remote {db_name} database {name} from {ssh}.")
+        else:
+            logging.info(f"Dumping {db_name} database {name}.")
+        logging.debug(
+            'Command: "'
+            + '" "'.join(
+                [re.sub("(MYSQL_PWD|PGPASSWORD)=(.+)", "\\1=*****", a) for a in args]
+            )
+            + '"'
+        )
+        logging.debug(
+            'Env: "'
+            + (
+                "None"
+                if env is None
+                else '" "'.join(
+                    [
+                        f"{k}={'*****' if k in ['MYSQL_PWD', 'PGPASSWORD'] else v}"
+                        for k, v in env.items()
+                    ]
                 )
-
-            t_stdout.start()
-            t_stderr.start()
-
-            while t_stdout.is_alive() and t_stderr.is_alive():
-                pass
-            pobj.wait()
-            sleep(1)
-
-        try:
-            self.post_run(dry_run)
-        except NotImplementedError:
-            pass
-
-    def pre_run(self, dry_run: bool = False):
-        """Will be executed as the first thing in run."""
-        raise NotImplementedError()
-
-    def post_run(self, dry_run: bool = False):
-        """Will be executed as the last thing in run."""
-        raise NotImplementedError()
-
-
-@dataclass
-class Source(Script):
-    """Dataclass for sources."""
-
-    T = TypeVar("T", bound="Source")
-
-    tool: Tool
-    target: Path
-    ssh: Optional[str] = None
-    sshfs: Optional[str] = None
-    sshfs_args: List[str] = field(default_factory=list)
-    excludes_includes: List[str] = field(default_factory=list)
-    pre_script: Optional[Script] = None
-    post_script: Optional[Script] = None
-    _sshfs_tmpdir: Optional[SshfsTemporaryDirectory] = None
-
-    @property
-    def hostname(self) -> str:
-        """Get the hostname either from self.host/self.sshfs or from socket.gethostname.
-
-        Returns:
-         * hostname
-        """
-        if self.ssh:
-            return self.ssh
-        elif self.sshfs:
-            return self.sshfs
-        else:
-            return socket.gethostname()
-
-    @classmethod
-    def from_xml(
-        cls: Type[T],
-        e: etree.Element,
-        cwd: Optional[Path] = None,
-        cmd: Union[Tuple[Tool, List[str]], List[str]] = [],
-        **kwargs,
-    ) -> T:
-        """Create Script from XML.
-
-        Args:
-         * e: XML Element
-         * cwd: path to working dir to run from
-         * cmd: backup tool, an instance of the Tool enum.
-
-        Returns:
-         * Instance of script.
-        """
-        assert isinstance(cmd, tuple)
-
-        default_target = (
-            kwargs["default_target"] if "default_target" in kwargs else None
-        )
-        scripts = kwargs["scripts"] if "scripts" in kwargs else {}
-
-        path = e.find("p:path", namespaces=NAMESPACE)
-        ssh = path.attrib["ssh"] if "ssh" in path.attrib else None
-        sshfs = path.attrib["sshfs"] if "sshfs" in path.attrib else None
-        sshfs_args = (
-            shlex.split(path.attrib["sshfs-args"])
-            if "sshfs-args" in path.attrib
-            else []
-        )
-
-        if e.find("p:target", namespaces=NAMESPACE) is not None:
-            target = Path(e.find("p:target", namespaces=NAMESPACE).text.strip())
-        elif default_target is not None:
-            target = default_target
-        else:
-            logging.error(f"No target for source {path}.")
-            sys.exit(1)
-
-        source = cls(
-            tool=cmd[0],
-            path=Path(path.text.strip()),
-            args=cmd[1],
-            cwd=None,
-            ssh=ssh,
-            sshfs=sshfs,
-            sshfs_args=sshfs_args,
-            target=target,
-        )
-
-        excludes_includes = []
-        for i in e.xpath("p:exclude|p:include|p:pattern", namespaces=NAMESPACE):
-            name = etree.QName(i).localname
-            if source.tool == Tool.BORG and name == "include":
-                logging.critical("The include-tag is not supported with borg.")
-                sys.exit(1)
-            elif source.tool != Tool.BORG and name == "pattern":
-                logging.critical("The include-tag is not supported with borg.")
-                sys.exit(1)
-            excludes_includes.append(f"--{name}={i.text.strip()}")
-        source.excludes_includes = excludes_includes
-
-        if e.find("p:pre_script", namespaces=NAMESPACE) is not None:
-            source.pre_script = scripts[
-                int(e.find("p:pre_script", namespaces=NAMESPACE).text.strip())
-            ]
-        if e.find("p:post_script", namespaces=NAMESPACE) is not None:
-            source.post_script = scripts[
-                int(e.find("p:post_script", namespaces=NAMESPACE).text.strip())
-            ]
-
-        return source
-
-    def pre_run(self, dry_run: bool = False):
-        """Will be executed as the first thing in run."""
-        if self.sshfs is not None and self._sshfs_tmpdir is None:
-            self._sshfs_tmpdir = SshfsTemporaryDirectory(
-                self.sshfs, self.path, self.sshfs_args, dry_run
             )
-        if self.pre_script is not None:
-            logging.info(f"Run pre-script {self.pre_script.path}.")
-            self.pre_script.run(dry_run)
+            + '"'
+        )
+        logging.debug(f"Cwd: {cwd}")
 
-    def post_run(self, dry_run: bool = False):
-        """Will be executed as the last thing in run."""
-        if self.post_script is not None:
-            logging.info(f"Run post-script {self.post_script.path}.")
-            self.post_script.run(dry_run)
-        if self._sshfs_tmpdir is not None:
-            self._sshfs_tmpdir.cleanup()
-            self._sshfs_tmpdir = None
+        if not dry_run:
+            with gzip.open(target, "wt", encoding="utf8") as f:
+                if (
+                    run_command(
+                        args,
+                        cwd,
+                        env,
+                        thread_logging(lambda s: f.write(s)),
+                        thread_logging(lambda s: logging.error(s)),
+                    )
+                    != 0
+                ):
+                    if ssh is not None:
+                        logging.error(
+                            f"Remote {db_name} dump of {name} from {ssh} failed."
+                        )
+                    else:
+                        logging.error(f"{db_name} dump of {name} failed.")
+                else:
+                    logging.debug("Database dump successful.")
 
-    def build_command_args(self, dry_run: bool = False) -> List[str]:
-        """Build command line arguments."""
-        if isinstance(self.path, str):
-            self.path = Path(self.path)
+    return dump
 
-        if self.ssh:
-            logging.info(f"Backup remote source {self.ssh}:{self.path}.")
-            path = self.path
-        elif self.sshfs:
-            logging.info(f"Backup sshfs source {self.sshfs}:{self.path}.")
-            path = self.path
-        else:
-            logging.info(f"Backup local source {self.path}.")
-            if self.path.is_dir():
-                path = self.path
+
+def make_source_backup_function(
+    e: etree.Element,
+    target: Path,
+    tool: Tuple[Tool, List[str]],
+    cwd: Optional[str],
+    env: Optional[Dict[str, str]],
+    dry_run: bool = False,
+    scripts: Dict[int, List[str]] = {},
+) -> Callable[[], None]:
+    """Make a function to create a backup of a source.
+
+    Args:
+     * e: etree element, as basis for the backup
+     * target: target for the backup
+     * tool: backup tool to use
+     * cwd: optional, current working directory to run from
+     * env: optional, environment variables
+     * dry_run: perform a dry run where no changes are performed
+     * scripts: pre- and post-backup scripts
+
+    Returns:
+     * function to make a backup
+    """
+    logging.debug(f"Parsing XML element {e} for database.")
+    tool, args = tool[0], [tool[0].value] + tool[1].copy()
+
+    path = Path(e.find("p:path", namespaces=NAMESPACE).text.strip())
+
+    ssh = None
+    sshfs = None
+    sshfs_args = []
+    if "sshfs" in e.attrib:
+        sshfs = e.attrib["sshfs"]
+        if "sshfs-args" in e.attrib:
+            sshfs_args = shlex.split(e.attrib["sshfs-args"])
+        target /= Path(e.attrib["sshfs"])
+    elif "ssh" in e.attrib:
+        ssh = e.attrib["ssh"]
+        target /= Path(e.attrib["ssh"])
+    else:
+        target /= Path(socket.gethostname())
+    backup_dir = target / Path("backup")
+    backup_dir /= path.relative_to(backup_dir.anchor)
+    target /= Path("files") / path.relative_to(target.anchor)
+    snapshot = target / f"{path.name}.snapshot"
+    tar_name = f"{path.name}.%d.tar"
+    if not target.exists() and not dry_run:
+        target.mkdir(parents=True, exist_ok=True)
+        if tool == Tool.BORG:
+            logging.warning(
+                f"No borg repository found in {target.absolute()}, initializing it."
+            )
+            run_command(
+                ["borg", "init", "--encryption", "repokey", str(target.absolute())],
+                cwd,
+                env,
+                None,
+                None,
+            )
+
+    for i in range(len(args)):
+        if tool == Tool.TAR:
+            if args[i] in ["-z", "--gzip", "--gunzip", "--ungzip"]:
+                tar_name += ".gz"
+            elif args[i] in ["-j", "--bzip2"]:
+                tar_name += ".bz2"
+            elif args[i] in ["-J", "--xz"]:
+                tar_name += ".xz"
+            elif args[i] == "--lzip":
+                tar_name += ".lz"
+            elif args[i] == "--lzma":
+                tar_name += ".lzma"
+            elif args[i] == "--lzop":
+                tar_name += ".lzo"
+            elif args[i] in ["-Z", "--compress", "--uncompress"]:
+                tar_name += ".Z"
+            elif args[i] == "--zstd":
+                tar_name += ".zst"
+            elif args[i] == "--listed-incremental=%s":
+                tar_name %= len(list(target.glob(tar_name.replace("%d", "*"))))
+                args[i] %= snapshot
+        if args[i] == "--backup-dir=%s":
+            args[i] %= backup_dir
+    for i in e.xpath("p:exclude|p:include|p:pattern", namespaces=NAMESPACE):
+        args.append(f"--{etree.QName(i).localname}={i.text.strip()}")
+
+    pre_script = (
+        scripts[int(e.find("p:pre_script", namespaces=NAMESPACE).text.strip())]
+        if e.find("p:pre_script", namespaces=NAMESPACE) is not None
+        else None
+    )
+    post_script = (
+        scripts[int(e.find("p:post_script", namespaces=NAMESPACE).text.strip())]
+        if e.find("p:post_script", namespaces=NAMESPACE) is not None
+        else None
+    )
+
+    if tool == Tool.BORG:
+        if sshfs is not None:
+            if path.name == "":
+                backup_name = f"{e.attrib['sshfs']}-{{now}}"
             else:
-                path = self.path.parent
-
-        target: Path = self.target / self.hostname / "files"
-        backup_dir = self.target / self.hostname / "backup"
-
-        snapshot = None
-        if self.tool == Tool.BORG:
-            if path.name == "" and self.ssh is None and self.sshfs is None:
+                backup_name = f"{e.attrib['sshfs']}:{path.name}-{{now}}"
+            args += [f"{target.absolute()}::{backup_name}", "."]
+        else:
+            if path.name == "":
                 backup_name = "{hostname}-{now}"
-            elif path.name == "" and self.ssh is not None:
-                backup_name = f"{self.ssh}-{{now}}"
-            elif path.name == "" and self.sshfs is not None:
-                backup_name = f"{self.sshfs}-{{now}}"
-            elif self.ssh is not None:
-                backup_name = f"{self.ssh}:{path.name}-{{now}}"
-            elif self.sshfs is not None:
-                backup_name = f"{self.sshfs}:{path.name}-{{now}}"
             else:
                 backup_name = f"{{hostname}}:{path.name}-{{now}}"
-        elif self.tool == Tool.DUPLICITY or self.tool == Tool.RSYNC:
-            target = target / path.relative_to(target.anchor)
-            backup_dir = backup_dir / path.relative_to(backup_dir.anchor)
-        elif self.tool == Tool.TAR:
-            target = target / path.parent.relative_to(target.anchor)
-            if not target.exists() and not dry_run:
-                target.mkdir(parents=True, exist_ok=True)
-            snapshot = target / f"{path.name}.snapshot"
-            tar_name = f"{path.name}.%d.tar"
+            args += [f"{target.absolute()}::{backup_name}", str(path)]
+        args = [args[0], "create"] + args[1:]
+    elif tool == Tool.DUPLICITY:
+        if "sshfs" in e.attrib:
+            args += [".", f"file://{target.absolute()}"]
+        elif "ssh" in e.attrib:
+            args += [f"{e.attrib['ssh']}:{path}", f"file://{target.absolute()}"]
+        else:
+            args += [str(path), f"file://{target.absolute()}"]
+    elif tool == Tool.RSYNC:
+        if "sshfs" in e.attrib:
+            args += ([".", str(target.absolute())],)
+        elif "ssh" in e.attrib:
+            args += [f"{e.attrib['ssh']}:{path}/", str(target.absolute())]
+        else:
+            args += [f"{path}/", str(target.absolute())]
+    elif tool == Tool.TAR:
+        if "sshfs" in e.attrib:
+            args += ["--file", str((target / tar_name).absolute()), "."]
+        else:
+            args += ["--file", str((target / tar_name).absolute()), source]
 
-        logging.info(f"Backup target {target}.")
+    def backup():
+        if ssh is not None:
+            logging.info(f"Backing up source {path} from {ssh}.")
+        elif sshfs is not None:
+            logging.info(f"Backing up source {path} mounted from {sshfs}.")
+        else:
+            logging.info(f"Backing up source {path}.")
+        logging.debug('Command: "' + '" "'.join(args) + '"')
+        logging.debug(
+            'Env: "'
+            + (
+                "None"
+                if env is None
+                else '" "'.join([f"{k}={v}" for k, v in env.items()])
+            )
+            + '"'
+        )
+        logging.debug(f"Cwd: {'TEMPDIR' if sshfs else cwd}")
 
-        if not target.exists() and not dry_run:
-            target.mkdir(parents=True, exist_ok=True)
-            if self.tool == Tool.BORG:
-                logging.info(f"Initializing borg repository in {path.absolute()}.")
-                Script(
-                    self.tool.value,
-                    ["init", "--encryption", "repokey", str(target.absolute())],
-                    None,
-                ).run()
+        if dry_run:
+            return
 
-        cmd = [self.tool.value]
-        if self.tool == Tool.BORG:
-            cmd += ["create"]
-        for arg in self.args:
-            if self.tool == Tool.TAR:
-                if arg in ["-z", "--gzip", "--gunzip", "--ungzip"]:
-                    tar_name += ".gz"
-                elif arg in ["-j", "--bzip2"]:
-                    tar_name += ".bz2"
-                elif arg in ["-J", "--xz"]:
-                    tar_name += ".xz"
-                elif arg == "--lzip":
-                    tar_name += ".lz"
-                elif arg == "--lzma":
-                    tar_name += ".lzma"
-                elif arg == "--lzop":
-                    tar_name += ".lzo"
-                elif arg in ["-Z", "--compress", "--uncompress"]:
-                    tar_name += ".Z"
-                elif arg == "--zstd":
-                    tar_name += ".zst"
+        tmpdir = None
+        if sshfs is not None:
+            tmpdir = TemporaryDirectory(prefix="backup-")
+            logging.info(f"Mounting {sshfs}:{path} into {tmpdir.name}.")
+            run_command(
+                ["sshfs"] + sshfs_args + [f"{sshfs}:{path}", tmpdir.name],
+                None,
+                env,
+            )
+        if pre_script is not None:
+            logging.info("Run pre script.")
+            run_command(pre_script, tmpdir.name if sshfs else cwd, env)
 
-            if self.tool == Tool.RSYNC and arg == "--backup-dir=%s":
-                cmd += [arg % backup_dir]
-            elif self.tool == Tool.TAR and arg == "--listed-incremental=%s":
-                tar_name %= len(list(target.glob(tar_name.replace("%d", "*"))))
-                cmd += [arg % snapshot]
+        rc = run_command(
+            args,
+            tmpdir.name if sshfs else cwd,
+            env,
+            thread_logging(lambda s: logging.log(15, s)),
+            thread_logging(
+                lambda s: logging.log(15 if tool == Tool.BORG else logging.ERROR, s)
+            ),
+        )
+        if tool == Tool.BORG and rc == 1:
+            logging.warning(
+                "There where some warnings during the backup, but it reached its "
+                "normal end. You should check the logs."
+            )
+        elif rc != 0:
+            if ssh is not None:
+                logging.error(f"Backup of {path} from {ssh} failed.")
+            elif sshfs is not None:
+                logging.error(f"Backup of {path} mounted from {sshfs} failed.")
             else:
-                cmd += [arg]
-        cmd += self.excludes_includes
-
-        if self.ssh is not None:
-            source = f"{self.ssh}:{self.path}{'/' if self.tool == Tool.RSYNC else ''}"
-        elif self.sshfs is not None and self._sshfs_tmpdir is not None:
-            source = "."
-            self.cwd = self._sshfs_tmpdir.name
-        elif self.path.is_dir():
-            source = f"{self.path}{'/' if self.tool == Tool.RSYNC else ''}"
+                logging.error(f"Backup of {path} failed.")
         else:
-            source = str(self.path)
+            logging.debug("Backup successful.")
 
-        if self.tool == Tool.BORG:
-            return cmd + [
-                f"{target.absolute()}::{backup_name}",
-                source,
-            ]
-        elif self.tool == Tool.DUPLICITY:
-            return cmd + [
-                source,
-                f"file://{str(target.absolute())}",
-            ]
-        elif self.tool == Tool.RSYNC:
-            return cmd + [
-                source,
-                str(target.absolute()),
-            ]
-        elif self.tool == Tool.TAR:
-            return cmd + [
-                "--file",
-                str((target / tar_name).absolute()),
-                source,
-            ]
-        else:
-            return []
+        if post_script is not None:
+            logging.info("Run post script.")
+            run_command(post_script, tmpdir.name if sshfs else cwd, env)
+        if tmpdir is not None:
+            logging.info(f"Dismounting {tmpdir.name}.")
+            run_command(["fusermount3", "-u", tmpdir.name], None, env)
+            tmpdir.cleanup()
 
-    def backup(self, dry_run: bool = False):
-        """Make backup."""
-        self.run(dry_run)
+    return backup
 
 
 def to_bool(string: str, default: bool = False) -> bool:
@@ -677,9 +508,9 @@ def timestamp() -> str:
     """Get current timestamp as string.
 
     Returns:
-     * current timestamp in the format of "%Y%m%dT%H%M%S%z"
+     * current timestamp in the format of "%Y%m%dT%H%M%S"
     """
-    return time.strftime("%Y%m%dT%H%M%S%z", time.localtime())
+    return time.strftime("%Y%m%dT%H%M%S", time.localtime())
 
 
 def load(
@@ -689,6 +520,7 @@ def load(
 
     Args:
      * path: path to XML file
+     * schema_path: path to XSD schema
 
     Returns:
      * XML as etree.ElementTree if valid otherwise None
@@ -709,12 +541,12 @@ def load(
         )
         logging.critical(xmlschema.error_log.last_error)
         return None
-    elif doc.xpath("//p:path[@ssh and @sshfs]", namespaces=NAMESPACE):
+    elif doc.xpath("//p:source[@ssh and @sshfs]", namespaces=NAMESPACE):
         logging.critical(
             f"XML file {path if isinstance(path, Path) else path.name} is not valid."
         )
         logging.critical(
-            "Currently it is only supported that a path element has either the "
+            "Currently it is only supported that a source element has either the "
             "attribute ssh or sshfs."
         )
         return None
@@ -730,7 +562,23 @@ def load(
         logging.critical(
             f"XML file {path if isinstance(path, Path) else path.name} is not valid."
         )
-        logging.critical("pattern can only be used with borg.")
+        logging.critical("The pattern-tag can only be used with borg.")
+        return None
+    elif doc.xpath(
+        "//p:tool[@name = 'borg'] and //p:source[@ssh]", namespaces=NAMESPACE
+    ):
+        logging.critical(
+            f"XML file {path if isinstance(path, Path) else path.name} is not valid."
+        )
+        logging.critical("Currently borg with ssh is not supported.")
+        return None
+    elif doc.xpath(
+        "//p:tool[@name = 'tar'] and //p:source[@ssh]", namespaces=NAMESPACE
+    ):
+        logging.critical(
+            f"XML file {path if isinstance(path, Path) else path.name} is not valid."
+        )
+        logging.critical("Currently ssh with tar is not supported.")
         return None
     else:
         logging.debug(
@@ -742,61 +590,56 @@ def load(
 def parse(
     path: Union[Path, TextIO],
     target: Optional[Path] = None,
-    default_tool: Optional[Tool] = None,
-    default_config: Optional[List[str]] = None,
+    tool: Optional[Tuple[Tool, List[str]]] = None,
+    dry_run: bool = False,
 ) -> Tuple[
-    Dict[int, str], List[Source], List[MySQL], List[PostgreSQL], Dict[int, Script]
+    Dict[int, str],
+    List[Callable[[], None]],
+    List[Callable[[], None]],
+    List[Callable[[], None]],
+    Dict[int, List[str]],
 ]:
     """Parse XML file.
 
     Args:
      * path: path to XML file to parse
      * target: optional target to use as default target
+     * tool: tuple of backup tool and it's arguments
+     * dry_run: perform a dry run where no changes are performed
     """
-    assert (default_tool is None and default_config is None) or (
-        default_tool is not None and default_config is not None
-    )
-
     doc = load(path)
     if doc is None:
         sys.exit(1)
 
-    if default_tool is None and default_config is None:
+    if tool is None:
         e = doc.find("p:tool", namespaces=NAMESPACE)
-        tool = Tool(e.attrib["name"].strip())
-        config = shlex.split(e.text.strip()) if e.text else []
-    if default_tool is not None:
-        tool = default_tool
-    if default_config is not None:
-        config = default_config
+        tool = (
+            Tool(e.attrib["name"].strip()),
+            shlex.split(e.text.strip()) if e.text else [],
+        )
 
-    if (
-        target is None
-        and doc.find("p:options/p:target", namespaces=NAMESPACE) is not None
-    ):
-        target = Path(doc.find("p:options/p:target", namespaces=NAMESPACE).text.strip())
+    if target is None and doc.find("p:target", namespaces=NAMESPACE) is not None:
+        target = Path(doc.find("p:target", namespaces=NAMESPACE).text.strip())
+    if target is None:
+        logging.error("No target provided.")
+        sys.exit(1)
 
-    mysqls: List[MySQL] = []
+    mysqls: List[Callable[[], None]] = []
     for e in doc.xpath("p:databases/p:mysql/*", namespaces=NAMESPACE):
-        mysqls.append(MySQL.from_xml(e, target))
+        mysqls.append(make_db_dump_function(e, target, None, None, dry_run))
 
-    pgsqls: List[PostgreSQL] = []
+    pgsqls: List[Callable[[], None]] = []
     for e in doc.xpath("p:databases/p:postgresql/*", namespaces=NAMESPACE):
-        pgsqls.append(PostgreSQL.from_xml(e, target))
+        pgsqls.append(make_db_dump_function(e, target, None, None, dry_run))
 
-    scripts: Dict[int, Script] = {}
+    scripts: Dict[int, Callable[[], None]] = {}
     for e in doc.xpath("p:scripts/p:script", namespaces=NAMESPACE):
-        scripts[int(e.attrib["id"].strip())] = Script.from_xml(e)
+        scripts[int(e.attrib["id"].strip())] = shlex.split(e.text.strip())
 
-    sources: List[Source] = []
+    sources: List[Callable[[], None]] = []
     for e in doc.xpath("p:sources/p:source", namespaces=NAMESPACE):
         sources.append(
-            Source.from_xml(
-                e,
-                cmd=(tool, config),
-                default_target=target,
-                scripts=scripts,
-            )
+            make_source_backup_function(e, target, tool, None, None, dry_run, scripts)
         )
 
     pipeline: Dict[int, str] = {}
@@ -812,12 +655,7 @@ def parse(
                 npath = path.parent / npath
             else:
                 npath = Path(path.name).parent / npath
-        values = parse(
-            npath,
-            target,
-            default_tool=tool,
-            default_config=config,
-        )
+        values = parse(npath, target, tool, dry_run)
         sources += values[1]
         mysqls += values[2]
         pgsqls += values[3]
@@ -825,7 +663,7 @@ def parse(
     return pipeline, sources, mysqls, pgsqls, scripts
 
 
-def snapshot(sources: List[Source]):
+def snapshot(sources: List):
     """Make a snapshot of a list of Sources and stores it in a tar.gz.
 
     Args:
@@ -843,16 +681,11 @@ def snapshot(sources: List[Source]):
             snapshot_dir.mkdir(parents=True, exist_ok=True)
         snapshot_dir /= f"{timestamp()}.tar.gz"
         files_dir = base_dir / "files"
-        tar = Script(
-            path=Path("tar"),
-            args=[
-                "-czf",
-                str(snapshot_dir),
-            ]
+        rc = run_command(
+            ["tar", "-czf", str(snapshot_dir)]
             + [file.name for file in files_dir.iterdir()],
-            cwd=files_dir,
+            files_dir,
         )
-        tar.run()
 
 
 def filter_info(rec: logging.LogRecord) -> bool:
@@ -930,7 +763,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="do a dry run.",
+        help="do a dry run with perfomring no changes.",
     )
     parser.add_argument(
         "XML",
@@ -971,6 +804,9 @@ if __name__ == "__main__":
         handlers=[stdout_handler, stderr_handler],
     )
 
+    if args.dry_run:
+        logging.warning("Performing dry run, no changes will be done.")
+
     pipeline: Dict[int, str] = {}
     if args.XML is not None:
         if args.check_valid:
@@ -990,7 +826,9 @@ if __name__ == "__main__":
                     if not args.dry_run:
                         sys.exit(1)
 
-            pipeline, sources, mysqls, pgsqls, scripts = parse(args.XML, args.TARGET)
+            pipeline, sources, mysqls, pgsqls, scripts = parse(
+                args.XML, args.TARGET, dry_run=args.dry_run
+            )
     else:
         parser.print_usage()
 
@@ -998,13 +836,13 @@ if __name__ == "__main__":
         for k, v in sorted(pipeline.items(), key=lambda x: x[0]):
             if v == "backup":
                 for source in sources:
-                    source.backup(args.dry_run)
+                    source()
             elif v == "postgresql-dbs" and not (args.postgres or args.database):
                 for pgsql in pgsqls:
-                    pgsql.backup(args.dry_run)
+                    pgsql()
             elif v == "mysql-dbs" and not (args.mysql or args.database):
                 for mysql in mysqls:
-                    mysql.backup(args.dry_run)
+                    mysql()
             elif v.startswith("script-"):
                 logging.info(f"Running script {scripts[int(v[7:])].path}.")
                 scripts[int(v[7:])].run(args.dry_run)
@@ -1012,4 +850,7 @@ if __name__ == "__main__":
     if args.snapshot or args.snapshot_only:
         snapshot(sources)
 
-    logging.info("Backup complete.")
+    if args.dry_run:
+        logging.info("Dry run done.")
+    else:
+        logging.info("Backup done.")
