@@ -286,9 +286,9 @@ def make_db_dump_function(
 
 
 def make_source_backup_function(
-    e: etree.Element,
+    elem: etree.Element,
     target: Path,
-    tool: Tuple[Tool, List[str]],
+    tool_args: Tuple[Tool, List[str]],
     cwd: Optional[str],
     env: Optional[Dict[str, str]],
     dry_run: bool = False,
@@ -299,7 +299,7 @@ def make_source_backup_function(
     Args:
      * e: etree element, as basis for the backup
      * target: target for the backup
-     * tool: backup tool to use
+     * tool_args: backup tool to use and arguments
      * cwd: optional, current working directory to run from
      * env: optional, environment variables
      * dry_run: perform a dry run where no changes are performed
@@ -308,22 +308,22 @@ def make_source_backup_function(
     Returns:
      * function to make a backup
     """
-    logging.debug(f"Parsing XML element {e} for database.")
-    tool, args = tool[0], [tool[0].value] + tool[1].copy()
+    logging.debug(f"Parsing XML element {elem} for database.")
+    tool, args = tool_args[0], [tool_args[0].value] + tool_args[1].copy()
 
-    path = Path(e.find("p:path", namespaces=NAMESPACE).text.strip())
+    path = Path(elem.find("p:path", namespaces=NAMESPACE).text.strip())
 
     ssh = None
     sshfs = None
     sshfs_args = []
-    if "sshfs" in e.attrib:
-        sshfs = e.attrib["sshfs"]
-        if "sshfs-args" in e.attrib:
-            sshfs_args = shlex.split(e.attrib["sshfs-args"])
-        target /= Path(e.attrib["sshfs"])
-    elif "ssh" in e.attrib:
-        ssh = e.attrib["ssh"]
-        target /= Path(e.attrib["ssh"])
+    if "sshfs" in elem.attrib:
+        sshfs = elem.attrib["sshfs"]
+        if "sshfs-args" in elem.attrib:
+            sshfs_args = shlex.split(elem.attrib["sshfs-args"])
+        target /= Path(elem.attrib["sshfs"])
+    elif "ssh" in elem.attrib:
+        ssh = elem.attrib["ssh"]
+        target /= Path(elem.attrib["ssh"])
     else:
         target /= Path(socket.gethostname())
     backup_dir = target / Path("backup")
@@ -368,26 +368,26 @@ def make_source_backup_function(
                 args[i] %= snapshot
         if args[i] == "--backup-dir=%s":
             args[i] %= backup_dir
-    for i in e.xpath("p:exclude|p:include|p:pattern", namespaces=NAMESPACE):
-        args.append(f"--{etree.QName(i).localname}={i.text.strip()}")
+    for e in elem.xpath("p:exclude|p:include|p:pattern", namespaces=NAMESPACE):
+        args.append(f"--{etree.QName(e).localname}={e.text.strip()}")
 
     pre_script = (
-        scripts[int(e.find("p:pre_script", namespaces=NAMESPACE).text.strip())]
-        if e.find("p:pre_script", namespaces=NAMESPACE) is not None
+        scripts[int(elem.find("p:pre_script", namespaces=NAMESPACE).text.strip())]
+        if elem.find("p:pre_script", namespaces=NAMESPACE) is not None
         else None
     )
     post_script = (
-        scripts[int(e.find("p:post_script", namespaces=NAMESPACE).text.strip())]
-        if e.find("p:post_script", namespaces=NAMESPACE) is not None
+        scripts[int(elem.find("p:post_script", namespaces=NAMESPACE).text.strip())]
+        if elem.find("p:post_script", namespaces=NAMESPACE) is not None
         else None
     )
 
     if tool == Tool.BORG:
         if sshfs is not None:
             if path.name == "":
-                backup_name = f"{e.attrib['sshfs']}-{{now}}"
+                backup_name = f"{elem.attrib['sshfs']}-{{now}}"
             else:
-                backup_name = f"{e.attrib['sshfs']}:{path.name}-{{now}}"
+                backup_name = f"{elem.attrib['sshfs']}:{path.name}-{{now}}"
             args += [f"{target.absolute()}::{backup_name}", "."]
         else:
             if path.name == "":
@@ -397,24 +397,24 @@ def make_source_backup_function(
             args += [f"{target.absolute()}::{backup_name}", str(path)]
         args = [args[0], "create"] + args[1:]
     elif tool == Tool.DUPLICITY:
-        if "sshfs" in e.attrib:
+        if "sshfs" in elem.attrib:
             args += [".", f"file://{target.absolute()}"]
-        elif "ssh" in e.attrib:
-            args += [f"{e.attrib['ssh']}:{path}", f"file://{target.absolute()}"]
+        elif "ssh" in elem.attrib:
+            args += [f"{elem.attrib['ssh']}:{path}", f"file://{target.absolute()}"]
         else:
             args += [str(path), f"file://{target.absolute()}"]
     elif tool == Tool.RSYNC:
-        if "sshfs" in e.attrib:
-            args += ([".", str(target.absolute())],)
-        elif "ssh" in e.attrib:
-            args += [f"{e.attrib['ssh']}:{path}/", str(target.absolute())]
+        if "sshfs" in elem.attrib:
+            args += [".", str(target.absolute())]
+        elif "ssh" in elem.attrib:
+            args += [f"{elem.attrib['ssh']}:{path}/", str(target.absolute())]
         else:
             args += [f"{path}/", str(target.absolute())]
     elif tool == Tool.TAR:
-        if "sshfs" in e.attrib:
+        if "sshfs" in elem.attrib:
             args += ["--file", str((target / tar_name).absolute()), "."]
         else:
-            args += ["--file", str((target / tar_name).absolute()), source]
+            args += ["--file", str((target / tar_name).absolute()), str(path)]
 
     def backup():
         if ssh is not None:
@@ -632,7 +632,7 @@ def parse(
     for e in doc.xpath("p:databases/p:postgresql/*", namespaces=NAMESPACE):
         pgsqls.append(make_db_dump_function(e, target, None, None, dry_run))
 
-    scripts: Dict[int, Callable[[], None]] = {}
+    scripts: Dict[int, List[str]] = {}
     for e in doc.xpath("p:scripts/p:script", namespaces=NAMESPACE):
         scripts[int(e.attrib["id"].strip())] = shlex.split(e.text.strip())
 
@@ -681,10 +681,10 @@ def snapshot(sources: List):
             snapshot_dir.mkdir(parents=True, exist_ok=True)
         snapshot_dir /= f"{timestamp()}.tar.gz"
         files_dir = base_dir / "files"
-        rc = run_command(
+        run_command(
             ["tar", "-czf", str(snapshot_dir)]
             + [file.name for file in files_dir.iterdir()],
-            files_dir,
+            str(files_dir),
         )
 
 
@@ -761,6 +761,16 @@ if __name__ == "__main__":
         help="set logging format.",
     )
     parser.add_argument(
+        "--log-file",
+        type=lambda p: Path(p).absolute(),
+        help="log output to a file.",
+    )
+    parser.add_argument(
+        "--log-file-format",
+        default="[%(levelname)s] %(message)s",
+        help="set logging format for log file.",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="do a dry run with perfomring no changes.",
@@ -779,8 +789,9 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    logging.addLevelName(15, "STDOUT")
     if args.verbose == 0:
-        level = logging.WARN
+        level = logging.WARNING
     elif args.verbose == 1:
         level = logging.INFO
     elif args.verbose == 2:
@@ -788,9 +799,11 @@ if __name__ == "__main__":
     else:
         level = logging.DEBUG
 
+    handlers: List[logging.Handler] = []
     stdout_handler = logging.StreamHandler(sys.stdout)
-    stdout_handler.setLevel(logging.DEBUG)
+    stdout_handler.setLevel(level)
     stdout_handler.addFilter(filter_info)
+    handlers.append(stdout_handler)
 
     stderr_handler = logging.StreamHandler(sys.stderr)
     stderr_handler.setLevel(logging.WARNING)
@@ -798,10 +811,19 @@ if __name__ == "__main__":
         stderr_handler.setFormatter(
             logging.Formatter(f"[%(levelname)s] {args.log_format}")
         )
+    handlers.append(stderr_handler)
+
+    if args.log_file:
+        file_handler = logging.FileHandler(args.log_file)
+        file_handler.setLevel(15)
+        if args.log_file_format:
+            file_handler.setFormatter(logging.Formatter(args.log_file_format))
+        handlers.append(file_handler)
+
     logging.basicConfig(
         format=args.log_format,
-        level=level,
-        handlers=[stdout_handler, stderr_handler],
+        level=logging.DEBUG,
+        handlers=handlers,
     )
 
     if args.dry_run:
@@ -845,7 +867,8 @@ if __name__ == "__main__":
                     mysql()
             elif v.startswith("script-"):
                 logging.info(f"Running script {scripts[int(v[7:])].path}.")
-                scripts[int(v[7:])].run(args.dry_run)
+                if not args.dry_run:
+                    run_command(scripts[int(v[7:])])
 
     if args.snapshot or args.snapshot_only:
         snapshot(sources)
