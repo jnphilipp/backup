@@ -246,18 +246,21 @@ def make_db_dump_function(
             + '"'
         )
         logging.debug(
-            'Env: "'
+            "Env: "
             + (
                 "None"
                 if env is None
-                else '" "'.join(
-                    [
-                        f"{k}={'*****' if k in ['MYSQL_PWD', 'PGPASSWORD'] else v}"
-                        for k, v in env.items()
-                    ]
+                else (
+                    '"'
+                    + '" "'.join(
+                        [
+                            f"{k}={'*****' if k in ['MYSQL_PWD', 'PGPASSWORD'] else v}"
+                            for k, v in env.items()
+                        ]
+                    )
+                    + '"'
                 )
             )
-            + '"'
         )
         logging.debug(f"Cwd: {cwd}")
 
@@ -308,7 +311,7 @@ def make_source_backup_function(
     Returns:
      * function to make a backup
     """
-    logging.debug(f"Parsing XML element {elem} for database.")
+    logging.debug(f"Parsing XML element {elem} for source.")
     tool, args = tool_args[0], [tool_args[0].value] + tool_args[1].copy()
 
     path = Path(elem.find("p:path", namespaces=NAMESPACE).text.strip())
@@ -318,9 +321,10 @@ def make_source_backup_function(
     sshfs_args = []
     if "sshfs" in elem.attrib:
         sshfs = elem.attrib["sshfs"]
+        sshfs_server = re.sub("^.+?@", "", elem.attrib["sshfs"])
         if "sshfs-args" in elem.attrib:
             sshfs_args = shlex.split(elem.attrib["sshfs-args"])
-        target /= Path(elem.attrib["sshfs"])
+        target /= Path(sshfs_server)
     elif "ssh" in elem.attrib:
         ssh = elem.attrib["ssh"]
         target /= Path(elem.attrib["ssh"])
@@ -385,9 +389,9 @@ def make_source_backup_function(
     if tool == Tool.BORG:
         if sshfs is not None:
             if path.name == "":
-                backup_name = f"{elem.attrib['sshfs']}-{{now}}"
+                backup_name = f"{sshfs_server}-{{now}}"
             else:
-                backup_name = f"{elem.attrib['sshfs']}:{path.name}-{{now}}"
+                backup_name = f"{sshfs_server}:{path.name}-{{now}}"
             args += [f"{target.absolute()}::{backup_name}", "."]
         else:
             if path.name == "":
@@ -397,21 +401,21 @@ def make_source_backup_function(
             args += [f"{target.absolute()}::{backup_name}", str(path)]
         args = [args[0], "create"] + args[1:]
     elif tool == Tool.DUPLICITY:
-        if "sshfs" in elem.attrib:
+        if sshfs is not None:
             args += [".", f"file://{target.absolute()}"]
         elif "ssh" in elem.attrib:
             args += [f"{elem.attrib['ssh']}:{path}", f"file://{target.absolute()}"]
         else:
             args += [str(path), f"file://{target.absolute()}"]
     elif tool == Tool.RSYNC:
-        if "sshfs" in elem.attrib:
+        if sshfs is not None:
             args += [".", str(target.absolute())]
         elif "ssh" in elem.attrib:
             args += [f"{elem.attrib['ssh']}:{path}/", str(target.absolute())]
         else:
             args += [f"{path}/", str(target.absolute())]
     elif tool == Tool.TAR:
-        if "sshfs" in elem.attrib:
+        if sshfs is not None:
             args += ["--file", str((target / tar_name).absolute()), "."]
         else:
             args += ["--file", str((target / tar_name).absolute()), str(path)]
@@ -425,13 +429,12 @@ def make_source_backup_function(
             logging.info(f"Backing up source {path}.")
         logging.debug('Command: "' + '" "'.join(args) + '"')
         logging.debug(
-            'Env: "'
+            "Env: "
             + (
                 "None"
                 if env is None
-                else '" "'.join([f"{k}={v}" for k, v in env.items()])
+                else ('"' + '" "'.join([f"{k}={v}" for k, v in env.items()]) + '"')
             )
-            + '"'
         )
         logging.debug(f"Cwd: {'TEMPDIR' if sshfs else cwd}")
 
