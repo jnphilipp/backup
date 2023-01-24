@@ -39,7 +39,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import sleep
 from threading import Thread
-from typing import Callable, Dict, List, Optional, Set, TextIO, Tuple, Union
+from typing import Callable, Dict, List, Optional, TextIO, Tuple, Union
 
 
 __author__ = "J. Nathanael Philipp (jnphilipp)"
@@ -663,31 +663,6 @@ def parse(
     return pipeline, sources, mysqls, pgsqls, scripts
 
 
-def snapshot(sources: List):
-    """Make a snapshot of a list of Sources and stores it in a tar.gz.
-
-    Args:
-     * sources: list of sources to include in the snapshot
-    """
-    base_dirs: Set[Path] = set()
-    for source in sources:
-        base_dirs.add(source.target / source.hostname)
-
-    for base_dir in base_dirs:
-        logging.info(f"Taking snapshot of: {base_dir}")
-
-        snapshot_dir = base_dir / "snapshots"
-        if not snapshot_dir.exists():
-            snapshot_dir.mkdir(parents=True, exist_ok=True)
-        snapshot_dir /= f"{timestamp()}.tar.gz"
-        files_dir = base_dir / "files"
-        run_command(
-            ["tar", "-czf", str(snapshot_dir)]
-            + [file.name for file in files_dir.iterdir()],
-            str(files_dir),
-        )
-
-
 def filter_info(rec: logging.LogRecord) -> bool:
     """Log record filter for info and lower levels.
 
@@ -731,20 +706,6 @@ if __name__ == "__main__":
         action="store_true",
         dest="mysql",
         help="disables MySQL dumps.",
-    )
-    parser.add_argument(
-        "-s",
-        "--snapshot",
-        action="store_true",
-        dest="snapshot",
-        help="make a snapshot, as tar.gz.",
-    )
-    parser.add_argument(
-        "-S",
-        "--snapshot-only",
-        action="store_true",
-        dest="snapshot_only",
-        help="only make a snapshot, as tar.gz.",
     )
     parser.add_argument(
         "-v",
@@ -854,24 +815,20 @@ if __name__ == "__main__":
     else:
         parser.print_usage()
 
-    if not args.snapshot_only:
-        for k, v in sorted(pipeline.items(), key=lambda x: x[0]):
-            if v == "backup":
-                for source in sources:
-                    source()
-            elif v == "postgresql-dbs" and not (args.postgres or args.database):
-                for pgsql in pgsqls:
-                    pgsql()
-            elif v == "mysql-dbs" and not (args.mysql or args.database):
-                for mysql in mysqls:
-                    mysql()
-            elif v.startswith("script-"):
-                logging.info(f"Running script {scripts[int(v[7:])].path}.")
-                if not args.dry_run:
-                    run_command(scripts[int(v[7:])])
-
-    if args.snapshot or args.snapshot_only:
-        snapshot(sources)
+    for k, v in sorted(pipeline.items(), key=lambda x: x[0]):
+        if v == "backup":
+            for source in sources:
+                source()
+        elif v == "postgresql-dbs" and not (args.postgres or args.database):
+            for pgsql in pgsqls:
+                pgsql()
+        elif v == "mysql-dbs" and not (args.mysql or args.database):
+            for mysql in mysqls:
+                mysql()
+        elif v.startswith("script-"):
+            logging.info(f"Running script {scripts[int(v[7:])].path}.")
+            if not args.dry_run:
+                run_command(scripts[int(v[7:])])
 
     if args.dry_run:
         logging.info("Dry run done.")
