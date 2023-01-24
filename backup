@@ -829,7 +829,8 @@ if __name__ == "__main__":
             for mysql in mysqls:
                 mysql()
         elif v.startswith("script-"):
-            logging.info(f"Running script {scripts[int(v[7:])].path}.")
+            logging.info(f"Running script {int(v[7:])}.")
+            logging.debug('Command: "' + '" "'.join(scripts[int(v[7:])]) + '"')
             if not args.dry_run:
                 run_command(scripts[int(v[7:])])
 
