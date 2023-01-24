@@ -296,6 +296,7 @@ def make_source_backup_function(
     env: Optional[Dict[str, str]],
     dry_run: bool = False,
     scripts: Dict[int, List[str]] = {},
+    borg_init: List[str] = [],
 ) -> Callable[[], None]:
     """Make a function to create a backup of a source.
 
@@ -307,6 +308,7 @@ def make_source_backup_function(
      * env: optional, environment variables
      * dry_run: perform a dry run where no changes are performed
      * scripts: pre- and post-backup scripts
+     * borg_init: arguments for `borg init` command
 
     Returns:
      * function to make a backup
@@ -335,19 +337,35 @@ def make_source_backup_function(
     target /= Path("files") / path.relative_to(target.anchor)
     snapshot = target / f"{path.name}.snapshot"
     tar_name = f"{path.name}.%d.tar"
-    if not target.exists() and not dry_run:
-        target.mkdir(parents=True, exist_ok=True)
+    if not target.exists():
+        if not dry_run:
+            target.mkdir(parents=True, exist_ok=True)
         if tool == Tool.BORG:
             logging.warning(
                 f"No borg repository found in {target.absolute()}, initializing it."
             )
-            run_command(
-                ["borg", "init", "--encryption", "repokey", str(target.absolute())],
-                cwd,
-                env,
-                None,
-                None,
+            logging.debug(
+                'Command: "'
+                + '" "'.join(["borg", "init"] + borg_init + [str(target.absolute())])
+                + '"'
             )
+            logging.debug(
+                "Env: "
+                + (
+                    "None"
+                    if env is None
+                    else ('"' + '" "'.join([f"{k}={v}" for k, v in env.items()]) + '"')
+                )
+            )
+            logging.debug(f"Cwd: {cwd}")
+            if not dry_run:
+                run_command(
+                    ["borg", "init"] + borg_init + [str(target.absolute())],
+                    cwd,
+                    env,
+                    None,
+                    None,
+                )
 
     for i in range(len(args)):
         if tool == Tool.TAR:
@@ -603,6 +621,7 @@ def parse(
     target: Optional[Path] = None,
     tool: Optional[Tuple[Tool, List[str]]] = None,
     dry_run: bool = False,
+    borg_init: List[str] = [],
 ) -> Tuple[
     Dict[int, str],
     List[Callable[[], None]],
@@ -617,6 +636,14 @@ def parse(
      * target: optional target to use as default target
      * tool: tuple of backup tool and it's arguments
      * dry_run: perform a dry run where no changes are performed
+     * borg_init: arguments for `borg init` command
+
+    Returns:
+     * pipeline: dictionary of the pipeline steps
+     * sources: list of backup functions to call
+     * mysqls: list of MySQL dump functions to call
+     * pgsqls: list of PostgreSQL dump functions to call
+     * scripts: list of scripts, as list of arguments
     """
     doc = load(path)
     if doc is None:
@@ -650,7 +677,9 @@ def parse(
     sources: List[Callable[[], None]] = []
     for e in doc.xpath("p:sources/p:source", namespaces=NAMESPACE):
         sources.append(
-            make_source_backup_function(e, target, tool, None, None, dry_run, scripts)
+            make_source_backup_function(
+                e, target, tool, None, None, dry_run, scripts, borg_init
+            )
         )
 
     pipeline: Dict[int, str] = {}
@@ -666,7 +695,7 @@ def parse(
                 npath = path.parent / npath
             else:
                 npath = Path(path.name).parent / npath
-        values = parse(npath, target, tool, dry_run)
+        values = parse(npath, target, tool, dry_run, borg_init)
         sources += values[1]
         mysqls += values[2]
         pgsqls += values[3]
@@ -741,6 +770,11 @@ if __name__ == "__main__":
         "--log-file-format",
         default="[%(levelname)s] %(message)s",
         help="set logging format for log file.",
+    )
+    parser.add_argument(
+        "--borg-init",
+        default="--encryption repokey",
+        help="arguments for borg init command.",
     )
     parser.add_argument(
         "--dry-run",
@@ -821,7 +855,10 @@ if __name__ == "__main__":
                         sys.exit(1)
 
             pipeline, sources, mysqls, pgsqls, scripts = parse(
-                args.XML, args.TARGET, dry_run=args.dry_run
+                args.XML,
+                args.TARGET,
+                dry_run=args.dry_run,
+                borg_init=shlex.split(args.borg_init),
             )
     else:
         parser.print_usage()
