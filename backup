@@ -560,6 +560,14 @@ def load(
         logging.critical("Borg does not support include, use pattern.")
         return None
     elif doc.xpath(
+        "//p:tool[@name = 'tar'] and //p:include|//p:pattern", namespaces=NAMESPACE
+    ):
+        logging.critical(
+            f"XML file {path if isinstance(path, Path) else path.name} is not valid."
+        )
+        logging.critical("Tar only supports exclude.")
+        return None
+    elif doc.xpath(
         "not(//p:tool[@name = 'borg']) and //p:pattern", namespaces=NAMESPACE
     ):
         logging.critical(
