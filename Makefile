@@ -102,7 +102,7 @@ build/changelog.Debian.gz: build
 	$(Q)cat build/changelog | gzip -n9 > build/changelog.Debian.gz
 
 build/backup.1.gz: build build/copyright.h2m
-	$(Q)help2man ./backup -i build/copyright.h2m -n "Python wrapper for rsync." | gzip -n9 > build/backup.1.gz
+	$(Q)help2man ./backup -i build/copyright.h2m -n "Easily configure and reproducibly run complex backups." | gzip -n9 > build/backup.1.gz
 	$(Q)LC_ALL=en_US.UTF-8 MANROFFSEQ='' MANWIDTH=80 man --warnings -E UTF-8 -l -Tutf8 -Z ./build/backup.1.gz > /dev/null
 
 build/package/DEBIAN/md5sums: backup backup.xsd backup.bash-completion build/copyright build/changelog.Debian.gz build/backup.1.gz
@@ -118,13 +118,16 @@ build/package/DEBIAN/control: build/package/DEBIAN/md5sums
 	$(Q)echo "Section: utils" >> build/package/DEBIAN/control
 	$(Q)echo "Priority: optional" >> build/package/DEBIAN/control
 	$(Q)echo "Architecture: all" >> build/package/DEBIAN/control
-	$(Q)echo "Depends: python3 (>= 3.7), python3-lxml, rsync" >> build/package/DEBIAN/control
-	$(Q)echo "Recommends: pass" >> build/package/DEBIAN/control
+	$(Q)echo "Depends: python3 (>= 3.7), python3-lxml" >> build/package/DEBIAN/control
+	$(Q)echo "Recommends: borg, duplicity, rsync, tar" >> build/package/DEBIAN/control
 	$(Q)echo "Installed-Size: `du -sk build/package/usr | grep -oE "[0-9]+"`" >> build/package/DEBIAN/control
 	$(Q)echo "Maintainer: J. Nathanael Philipp <nathanael@philipp.land>" >> build/package/DEBIAN/control
 	$(Q)echo "Homepage: https://github.com/jnphilipp/backup" >> build/package/DEBIAN/control
 	$(Q)echo "Description: Easily configure and reproducibly run complex backups" >> build/package/DEBIAN/control
-	$(Q)echo " This tool is to easly manage and configure complex backups. With XML" >> build/package/DEBIAN/control
-	$(Q)echo " configure complex backups. Supports rsync and tar as backup tools." >> build/package/DEBIAN/control
-	$(Q)echo " Additionally configure database dumps (MySQL and PostgreSQL) or" >> build/package/DEBIAN/control
-	$(Q)echo " arbitrary scripts that should be run during backup." >> build/package/DEBIAN/control
+	$(Q)echo " This tool is to easly manage and configure complex backups, where" >> build/package/DEBIAN/control
+	$(Q)echo " multiple folders from various sources, both locally and remotely" >> build/package/DEBIAN/control
+	$(Q)echo " should be backed up. The configuration is stored in a XML-file." >> build/package/DEBIAN/control
+	$(Q)echo " For the backup itself, currently rsync, tar, duplicity or borg" >> build/package/DEBIAN/control
+	$(Q)echo " are supported. Additionally configure database dumps (MySQL and" >> build/package/DEBIAN/control
+	$(Q)echo " PostgreSQL) or arbitrary scripts, that should be run during the" >> build/package/DEBIAN/control
+	$(Q)echo " backup process." >> build/package/DEBIAN/control
