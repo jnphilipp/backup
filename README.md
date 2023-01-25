@@ -9,17 +9,16 @@ Easily configure and reproducibly run complex backups.
  * Configure complex backups with XML
  * XML schema validation
  * Configurable scripts to run during backup
- * Support for rsync and tar
+ * Support for rsync, tar, duplicity and borg
  * Database dumps for MySQL and PostgreSQL
  * Configurable pipeline
- * Snapshots
 
 
 ## Requirements
 
 * Python 3.7 or newer
 * python-lxml
-* rsync or tar as backup tool
+* rsync, tar, duplicity or borg as backup tool
 
 
 ## Install
@@ -30,8 +29,4 @@ Easily configure and reproducibly run complex backups.
 
 ## Usage
 
-For options see `$ backup -h`. For example XML configuration have a look at `/tests/rsync.xml` or `/tests/tar.xml`.
-
-### Icon
-
-Icon made from [Icon Fonts](http://www.onlinewebfonts.com/icon) licensed by CC BY 3.0.
+For options see `$ backup -h`. For example XML configuration have a look at XML-files in `/tests`.
