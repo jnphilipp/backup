@@ -101,26 +101,37 @@ class BorgBackupTests(unittest.TestCase):
         self.assertEqual(p.returncode, 0)
         self.assertIsNotNone(
             re.fullmatch(
-                r"Using \'[^\']+/BACKUPS\' as backup target\.\nBackup local source /\.\n"
-                + r"Backup target .+?/BACKUPS/.+?/files\.\nThe following command would be "
-                + r'run:\n"borg" "create" "--verbose" "--filter=AMUCE" "--list" "--stats" '
-                + r'"--show-rc" "--compression" "zstd,11" "--exclude-caches" '
-                + r'"--exclude=\*\.pyc" "--exclude=\*\*/\.cache" "--exclude=\*\*/venv" '
-                + r'"--exclude=\*\*/\.venv" "--exclude=\*\*/__pycache__" '
-                + r'"--exclude=\*\*/\.mypy_cache" "--pattern=\+boot" "--pattern=\+etc" '
-                + r'"--pattern=\+home" "--pattern=\+opt" "--pattern=!proc" '
-                + r'"--pattern=\+root" "--pattern=\+srv" "--pattern=!tmp" '
-                + r'"--pattern=-var/\*\*/logs" "--pattern=-pp:var/cache" '
-                + r'"--pattern=-pp:var/crash" "--pattern=-pp:var/log" '
-                + r'"--pattern=-pp:var/lock" "--pattern=-pp:var/run" '
-                + r'"--pattern=-pp:var/spool" "--pattern=-pp:var/tmp" "--pattern=\+var" '
-                + r'"--pattern=\+var/cache/pacman" "--pattern=-\*\*" '
-                + r'".+?/BACKUPS/.+?/files::{hostname}-{now}" "/"\nwith the working '
-                + r"directory: None\nBackup complete.\n",
+                r"Using '[^\']+/BACKUPS' as backup target\.\nBacking up source /\.\nDry run done\.\n",
                 stdout,
             )
         )
-        self.assertEqual("[WARNING] The given target path does not exists.\n", stderr)
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"\[WARNING\] Performing dry run, no changes will be done\.\n\[WARNING\] The given target path does not exists\.\n\[WARNING\] No borg repository found in .+?/BACKUPS/.+?/files, initializing it\.\n",
+                stderr,
+            )
+        )
+
+        p = Popen(
+            ["./backup", "--dry-run", "-vvv", "./tests/borg.xml", "./BACKUPS"],
+            stdout=PIPE,
+            stderr=PIPE,
+            encoding="utf8",
+        )
+        stdout, stderr = p.communicate()
+        self.assertEqual(p.returncode, 0)
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"Using '[^\']+/BACKUPS' as backup target\.\nLoading XML file \"\./tests/borg\.xml\"\.\nLoading XML schema \".*?backup\.xsd\"\.\nXML file \./tests/borg\.xml is valid\.\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nCommand: \"borg\" \"init\" \"--encryption\" \"repokey\" \".+?/BACKUPS/yoga-c940/files\"\nEnv: None\nCwd: None\nBacking up source /\.\nCommand: \"borg\" \"create\" \"--verbose\" \"--filter=AMUCE\" \"--list\" \"--stats\" \"--show-rc\" \"--compression\" \"zstd,11\" \"--exclude-caches\" \"--exclude=\*\.pyc\" \"--exclude=\*\*/\.cache\" \"--exclude=\*\*/venv\" \"--exclude=\*\*/\.venv\" \"--exclude=\*\*/__pycache__\" \"--exclude=\*\*/\.mypy_cache\" \"--pattern=\+boot\" \"--pattern=\+etc\" \"--pattern=\+home\" \"--pattern=\+opt\" \"--pattern=!proc\" \"--pattern=\+root\" \"--pattern=\+srv\" \"--pattern=!tmp\" \"--pattern=-var/\*\*/logs\" \"--pattern=-pp:var/cache\" \"--pattern=-pp:var/crash\" \"--pattern=-pp:var/log\" \"--pattern=-pp:var/lock\" \"--pattern=-pp:var/run\" \"--pattern=-pp:var/spool\" \"--pattern=-pp:var/tmp\" \"--pattern=\+var\" \"--pattern=\+var/cache/pacman\" \"--pattern=-\*\*\" \".+?/BACKUPS/.+?/files::{hostname}-{now}\" \"/\"\nEnv: None\nCwd: None\nDry run done.\n",
+                stdout,
+            )
+        )
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"\[WARNING\] Performing dry run, no changes will be done\.\n\[WARNING\] The given target path does not exists\.\n\[WARNING\] No borg repository found in .+?/BACKUPS/.+?/files, initializing it\.\n",
+                stderr,
+            )
+        )
 
         p = Popen(
             ["./backup", "--dry-run", "-v", "./tests/borg2.xml", "./BACKUPS"],
@@ -132,52 +143,37 @@ class BorgBackupTests(unittest.TestCase):
         self.assertEqual(p.returncode, 0)
         self.assertIsNotNone(
             re.fullmatch(
-                r"Using \'[^\']+/BACKUPS\' as backup target\.\nBackup local source /boot\."
-                + r"\nBackup target .+?/BACKUPS/.+?/files\.\nThe following command would be"
-                + r' run:\n"borg" "create" "--verbose" "--list" "--stats" "--show-rc" '
-                + r'"--compression" "zstd,11" "--exclude-caches" '
-                + r'".+?/BACKUPS/.+?/files::{hostname}:boot-{now}" "/boot"\nwith the '
-                + r"working directory: None\nBackup local source /etc\.\nBackup target "
-                + r'.+?/BACKUPS/.+?/files\.\nThe following command would be run:\n"borg" '
-                + r'"create" "--verbose" "--list" "--stats" "--show-rc" "--compression" '
-                + r'"zstd,11" "--exclude-caches" '
-                + r'".+?/BACKUPS/.+?/files::{hostname}:etc-{now}" "/etc"\nwith the working '
-                + r"directory: None\nBackup local source /home\.\nBackup target "
-                + r'.+?/BACKUPS/.+?/files\.\nThe following command would be run:\n"borg" '
-                + r'"create" "--verbose" "--list" "--stats" "--show-rc" "--compression" '
-                + r'"zstd,11" "--exclude-caches" "--exclude=\*\.pyc" '
-                + r'"--exclude=\*\*/\.cache" "--exclude=\*\*/venv" "--exclude=\*\*/\.venv" '
-                + r'"--exclude=\*\*/__pycache__" "--exclude=\*\*/\.mypy_cache" '
-                + r'".+?/BACKUPS/.+?/files::{hostname}:home-{now}" "/home"\nwith the '
-                + r"working directory: None\nBackup local source /opt\.\nBackup target "
-                + r'.+?/BACKUPS/.+?/files\.\nThe following command would be run:\n"borg" '
-                + r'"create" "--verbose" "--list" "--stats" "--show-rc" "--compression" '
-                + r'"zstd,11" "--exclude-caches" '
-                + r'".+?/BACKUPS/.+?/files::{hostname}:opt-{now}" "/opt"\nwith the working '
-                + r"directory: None\nBackup local source /root\.\nBackup target "
-                + r'.+?/BACKUPS/.+?/files\.\nThe following command would be run:\n"borg" '
-                + r'"create" "--verbose" "--list" "--stats" "--show-rc" "--compression" '
-                + r'"zstd,11" "--exclude-caches" '
-                + r'".+?/BACKUPS/.+?/files::{hostname}:root-{now}" "/root"\nwith the '
-                + r"working directory: None\nBackup local source /srv\.\nBackup target "
-                + r'.+?/BACKUPS/.+?/files\.\nThe following command would be run:\n"borg" '
-                + r'"create" "--verbose" "--list" "--stats" "--show-rc" "--compression" '
-                + r'"zstd,11" "--exclude-caches" '
-                + r'".+?/BACKUPS/.+?/files::{hostname}:srv-{now}" "/srv"\nwith the working '
-                + r"directory: None\nBackup local source /var\.\nBackup target "
-                + r'.+?/BACKUPS/.+?/files\.\nThe following command would be run:\n"borg" '
-                + r'"create" "--verbose" "--list" "--stats" "--show-rc" "--compression" '
-                + r'"zstd,11" "--exclude-caches" "--exclude=var/\*\*/logs" '
-                + r'"--exclude=pp:var/cache" "--exclude=pp:var/crash" '
-                + r'"--exclude=pp:var/log" "--exclude=pp:var/lock" "--exclude=pp:var/run" '
-                + r'"--exclude=pp:var/spool" "--exclude=pp:var/tmp" '
-                + r'"--pattern=\+var/cache/pacman" '
-                + r'".+?/BACKUPS/.+?/files::{hostname}:var-{now}" "/var"\nwith the working '
-                + r"directory: None\nBackup complete\.\n",
+                r"Using '[^\']+/BACKUPS' as backup target\.\nBacking up source /boot\.\nBacking up source /etc\.\nBacking up source /home\.\nBacking up source /opt\.\nBacking up source /root\.\nBacking up source /srv\.\nBacking up source /var\.\nDry run done\.\n",
                 stdout,
             )
         )
-        self.assertEqual("[WARNING] The given target path does not exists.\n", stderr)
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"\[WARNING\] Performing dry run, no changes will be done\.\n\[WARNING\] The given target path does not exists\.\n\[WARNING\] No borg repository found in .+?/BACKUPS/.+?/files/boot, initializing it\.\n\[WARNING\] No borg repository found in .+?/BACKUPS/.+?/files/etc, initializing it\.\n\[WARNING\] No borg repository found in .+?/BACKUPS/.+?/files/home, initializing it\.\n\[WARNING\] No borg repository found in .+?/BACKUPS/.+?/files/opt, initializing it\.\n\[WARNING\] No borg repository found in .+?/BACKUPS/.+?/files/root, initializing it\.\n\[WARNING\] No borg repository found in .+?/BACKUPS/.+?/files/srv, initializing it\.\n\[WARNING\] No borg repository found in .+?/BACKUPS/.+?/files/var, initializing it\.\n",
+                stderr,
+            )
+        )
+
+        p = Popen(
+            ["./backup", "--dry-run", "-vvv", "./tests/borg2.xml", "./BACKUPS"],
+            stdout=PIPE,
+            stderr=PIPE,
+            encoding="utf8",
+        )
+        stdout, stderr = p.communicate()
+        self.assertEqual(p.returncode, 0)
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"Using \'.+?/BACKUPS\' as backup target\.\nLoading XML file \"\./tests/borg2\.xml\"\.\nLoading XML schema \".*?backup\.xsd\"\.\nXML file \./tests/borg2\.xml is valid\.\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nCommand: \"borg\" \"init\" \"--encryption\" \"repokey\" \".+?/BACKUPS/.+?/files/boot\"\nEnv: None\nCwd: None\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nCommand: \"borg\" \"init\" \"--encryption\" \"repokey\" \".+?/BACKUPS/.+?/files/etc\"\nEnv: None\nCwd: None\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nCommand: \"borg\" \"init\" \"--encryption\" \"repokey\" \".+?/BACKUPS/.+?/files/home\"\nEnv: None\nCwd: None\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nCommand: \"borg\" \"init\" \"--encryption\" \"repokey\" \".+?/BACKUPS/.+?/files/opt\"\nEnv: None\nCwd: None\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nCommand: \"borg\" \"init\" \"--encryption\" \"repokey\" \".+?/BACKUPS/.+?/files/root\"\nEnv: None\nCwd: None\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nCommand: \"borg\" \"init\" \"--encryption\" \"repokey\" \".+?/BACKUPS/.+?/files/srv\"\nEnv: None\nCwd: None\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nCommand: \"borg\" \"init\" \"--encryption\" \"repokey\" \".+?/BACKUPS/.+?/files/var\"\nEnv: None\nCwd: None\nBacking up source /boot\.\nCommand: \"borg\" \"create\" \"--verbose\" \"--list\" \"--stats\" \"--show-rc\" \"--compression\" \"zstd,11\" \"--exclude-caches\" \".+?/BACKUPS/.+?/files/boot::{hostname}:boot-{now}\" \"/boot\"\nEnv: None\nCwd: None\nBacking up source /etc\.\nCommand: \"borg\" \"create\" \"--verbose\" \"--list\" \"--stats\" \"--show-rc\" \"--compression\" \"zstd,11\" \"--exclude-caches\" \".+?/BACKUPS/.+?/files/etc::{hostname}:etc-{now}\" \"/etc\"\nEnv: None\nCwd: None\nBacking up source /home\.\nCommand: \"borg\" \"create\" \"--verbose\" \"--list\" \"--stats\" \"--show-rc\" \"--compression\" \"zstd,11\" \"--exclude-caches\" \"--exclude=\*\.pyc\" \"--exclude=\*\*/\.cache\" \"--exclude=\*\*/venv\" \"--exclude=\*\*/\.venv\" \"--exclude=\*\*/__pycache__\" \"--exclude=\*\*/\.mypy_cache\" \".+?/BACKUPS/.+?/files/home::{hostname}:home-{now}\" \"/home\"\nEnv: None\nCwd: None\nBacking up source /opt\.\nCommand: \"borg\" \"create\" \"--verbose\" \"--list\" \"--stats\" \"--show-rc\" \"--compression\" \"zstd,11\" \"--exclude-caches\" \".+?/BACKUPS/.+?/files/opt::{hostname}:opt-{now}\" \"/opt\"\nEnv: None\nCwd: None\nBacking up source /root\.\nCommand: \"borg\" \"create\" \"--verbose\" \"--list\" \"--stats\" \"--show-rc\" \"--compression\" \"zstd,11\" \"--exclude-caches\" \".+?/BACKUPS/.+?/files/root::{hostname}:root-{now}\" \"/root\"\nEnv: None\nCwd: None\nBacking up source /srv\.\nCommand: \"borg\" \"create\" \"--verbose\" \"--list\" \"--stats\" \"--show-rc\" \"--compression\" \"zstd,11\" \"--exclude-caches\" \".+?/BACKUPS/.+?/files/srv::{hostname}:srv-{now}\" \"/srv\"\nEnv: None\nCwd: None\nBacking up source /var\.\nCommand: \"borg\" \"create\" \"--verbose\" \"--list\" \"--stats\" \"--show-rc\" \"--compression\" \"zstd,11\" \"--exclude-caches\" \"--exclude=var/\*\*/logs\" \"--exclude=pp:var/cache\" \"--exclude=pp:var/crash\" \"--exclude=pp:var/log\" \"--exclude=pp:var/lock\" \"--exclude=pp:var/run\" \"--exclude=pp:var/spool\" \"--exclude=pp:var/tmp\" \"--pattern=\+var/cache/pacman\" \".+?/BACKUPS/.+?/files/var::{hostname}:var-{now}\" \"/var\"\nEnv: None\nCwd: None\nDry run done\.\n",
+                stdout,
+            )
+        )
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"\[WARNING\] Performing dry run, no changes will be done\.\n\[WARNING\] The given target path does not exists\.\n\[WARNING\] No borg repository found in .+?/BACKUPS/.+?/files/boot, initializing it\.\n\[WARNING\] No borg repository found in .+?/BACKUPS/.+?/files/etc, initializing it\.\n\[WARNING\] No borg repository found in .+?/BACKUPS/.+?/files/home, initializing it\.\n\[WARNING\] No borg repository found in .+?/BACKUPS/.+?/files/opt, initializing it\.\n\[WARNING\] No borg repository found in .+?/BACKUPS/.+?/files/root, initializing it\.\n\[WARNING\] No borg repository found in .+?/BACKUPS/.+?/files/srv, initializing it\.\n\[WARNING\] No borg repository found in .+?/BACKUPS/.+?/files/var, initializing it\.\n",
+                stderr,
+            )
+        )
 
         p = Popen(
             ["./backup", "--dry-run", "-v", "./tests/borg-remote.xml", "./BACKUPS"],
@@ -189,33 +185,37 @@ class BorgBackupTests(unittest.TestCase):
         self.assertEqual(p.returncode, 0)
         self.assertIsNotNone(
             re.fullmatch(
-                r"Using \'[^\']+/BACKUPS\' as backup target\.\nMounting USER@SERVER:/ into "
-                + r'/tmp/backup-[\w_]+\.\nThe following command would be run:\n"sshfs" "-F"'
-                + r' "/home/USER/\.ssh/config" "USER@SERVER:/" "/tmp/backup-[\w_]+"\nwith '
-                + r"the working directory: None\nBackup sshfs source USER@SERVER:/\.\n"
-                + r"Backup target .+?/BACKUPS/USER@SERVER/files\.\nThe following command "
-                + r'would be run:\n"borg" "create" "--verbose" "--list" "--stats" '
-                + r'"--show-rc" "--compression" "zstd,11" "--exclude-caches" '
-                + r'"--exclude=\*\.pyc" "--exclude=\*\*/\.cache" "--exclude=\*\*/venv" '
-                + r'"--exclude=\*\*/\.venv" "--exclude=\*\*/__pycache__" '
-                + r'"--exclude=\*\*/\.mypy_cache" "--pattern=\+boot" "--pattern=\+etc" '
-                + r'"--pattern=\+home" "--pattern=\+opt" "--pattern=!pp:proc" '
-                + r'"--pattern=\+root" "--pattern=\+srv" "--pattern=!pp:tmp" '
-                + r'"--pattern=!pp:usr" "--pattern=-var/\*\*/logs" '
-                + r'"--pattern=-pp:var/cache" "--pattern=-pp:var/crash" '
-                + r'"--pattern=-pp:var/log" "--pattern=-pp:var/lock" '
-                + r'"--pattern=-pp:var/run" "--pattern=-pp:var/spool" '
-                + r'"--pattern=-pp:var/tmp" "--pattern=\+var" '
-                + r'"--pattern=\+var/cache/debconf" "--pattern=-\*\*" '
-                + r'".+?/BACKUPS/USER@SERVER/files::USER@SERVER-{now}" "\."\nwith the '
-                + r"working directory: /tmp/backup-[\w_]+\nDismounting /tmp/backup-[\w]+\."
-                + r'\nThe following command would be run:\n"fusermount3" "-u" '
-                + r'"/tmp/backup-[\w_]+"\nwith the working directory: None\nBackup complete'
-                + r"\.\n",
+                r"Using '[^\']+/BACKUPS' as backup target\.\nBacking up source / mounted from USER@SERVER\.\nDry run done\.\n",
                 stdout,
             )
         )
-        self.assertEqual("[WARNING] The given target path does not exists.\n", stderr)
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"\[WARNING\] Performing dry run, no changes will be done\.\n\[WARNING\] The given target path does not exists\.\n\[WARNING\] No borg repository found in .+?/backup/BACKUPS/SERVER/files, initializing it\.\n",
+                stderr,
+            )
+        )
+
+        p = Popen(
+            ["./backup", "--dry-run", "-vvv", "./tests/borg-remote.xml", "./BACKUPS"],
+            stdout=PIPE,
+            stderr=PIPE,
+            encoding="utf8",
+        )
+        stdout, stderr = p.communicate()
+        self.assertEqual(p.returncode, 0)
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"Using '.+?/BACKUPS' as backup target\.\nLoading XML file \"\./tests/borg-remote\.xml\"\.\nLoading XML schema \".*?backup\.xsd\"\.\nXML file \./tests/borg-remote\.xml is valid\.\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nCommand: \"borg\" \"init\" \"--encryption\" \"repokey\" \".+?/BACKUPS/SERVER/files\"\nEnv: None\nCwd: None\nBacking up source / mounted from USER@SERVER\.\nCommand: \"borg\" \"create\" \"--verbose\" \"--list\" \"--stats\" \"--show-rc\" \"--compression\" \"zstd,11\" \"--exclude-caches\" \"--exclude=\*\.pyc\" \"--exclude=\*\*/\.cache\" \"--exclude=\*\*/venv\" \"--exclude=\*\*/\.venv\" \"--exclude=\*\*/__pycache__\" \"--exclude=\*\*/\.mypy_cache\" \"--pattern=\+boot\" \"--pattern=\+etc\" \"--pattern=\+home\" \"--pattern=\+opt\" \"--pattern=!pp:proc\" \"--pattern=\+root\" \"--pattern=\+srv\" \"--pattern=!pp:tmp\" \"--pattern=!pp:usr\" \"--pattern=-var/\*\*/logs\" \"--pattern=-pp:var/cache\" \"--pattern=-pp:var/crash\" \"--pattern=-pp:var/log\" \"--pattern=-pp:var/lock\" \"--pattern=-pp:var/run\" \"--pattern=-pp:var/spool\" \"--pattern=-pp:var/tmp\" \"--pattern=\+var\" \"--pattern=\+var/cache/debconf\" \"--pattern=-\*\*\" \".+?/BACKUPS/SERVER/files::SERVER-{now}\" \"\.\"\nEnv: None\nCwd: TEMPDIR\nDry run done\.\n",
+                stdout,
+            )
+        )
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"\[WARNING\] Performing dry run, no changes will be done\.\n\[WARNING\] The given target path does not exists\.\n\[WARNING\] No borg repository found in .+?/BACKUPS/SERVER/files, initializing it\.\n",
+                stderr,
+            )
+        )
 
 
 if __name__ == "__main__":

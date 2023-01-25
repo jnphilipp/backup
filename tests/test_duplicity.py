@@ -38,8 +38,8 @@ class DuplicityBackupTests(unittest.TestCase):
         )
         stdout, stderr = p.communicate()
         self.assertEqual(p.returncode, 0)
-        self.assertEqual(stdout, "XML file ./tests/duplicity.xml is valid.\n")
-        self.assertEqual(stderr, "")
+        self.assertEqual("XML file ./tests/duplicity.xml is valid.\n", stdout)
+        self.assertEqual("", stderr)
 
         p = Popen(
             [
@@ -53,8 +53,8 @@ class DuplicityBackupTests(unittest.TestCase):
         )
         stdout, stderr = p.communicate()
         self.assertEqual(p.returncode, 0)
-        self.assertEqual(stdout, "")
-        self.assertEqual(stderr, "")
+        self.assertEqual("", stdout)
+        self.assertEqual("", stderr)
 
         p = Popen(
             [
@@ -68,15 +68,12 @@ class DuplicityBackupTests(unittest.TestCase):
         )
         stdout, stderr = p.communicate()
         self.assertEqual(p.returncode, 1)
-        self.assertEqual(stdout, "")
-        regex = (
-            r"\[CRITICAL\] XML file \./tests/duplicity-invalid\.xml is not valid\.\n"
-            + r"\[CRITICAL\] .+?/duplicity-invalid\.xml:6:0:ERROR:SCHEMASV:SCHEMAV_"
-            + r"ELEMENT_CONTENT: Element '{https://github\.com/jnphilipp/backup/}"
-            + r"exclude': This element is not expected\. Expected is \( {https://github"
-            + r"\.com/jnphilipp/backup/}path \).\n"
+        self.assertEqual("", stdout)
+        self.assertEqual(
+            "[CRITICAL] XML file ./tests/duplicity-invalid.xml is not valid.\n"
+            + "[CRITICAL] The pattern-tag can only be used with borg.\n",
+            stderr,
         )
-        self.assertIsNotNone(re.fullmatch(regex, stderr))
 
     def test_backup(self):
         p = Popen(
@@ -87,21 +84,35 @@ class DuplicityBackupTests(unittest.TestCase):
         )
         stdout, stderr = p.communicate()
         self.assertEqual(p.returncode, 0)
-        regex = (
-            r"Using \'[^\']+BACKUPS\' as backup target\.\nBackup local source /\.\n"
-            + r"Backup target .+?/BACKUPS/.+?/files\.\nThe following command would be "
-            + r'run:\n"duplicity" "--volsize" "1024" "--full-if-older-than" "1D" '
-            + r'"--exclude=\*\*/.cache" "--exclude=\*\*/venv" "--exclude=\*\*/.venv" '
-            + r'"--exclude=\*\*/__pycache__" "--exclude=\*\*/.mypy_cache" '
-            + r'"--include=/var" "--exclude=/var/crash" "--exclude=/var/log" '
-            + r'"--exclude=/var/lock" "--exclude=/var/run" "--exclude=/var/spool" '
-            + r'"--exclude=/var/tmp" "--include=/boot" "--include=/etc" '
-            + r'"--include=/srv" "--include=/opt" "--include=/root" "--include=/home" '
-            + r'"--exclude=\*\*" "/" "file:///.+?/BACKUPS/.+?/files"\nwith the working '
-            + r"directory: None\nBackup complete\.\n"
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"Using '[^\']+/BACKUPS' as backup target\.\nBacking up source /\.\nDry run done\.\n",
+                stdout,
+            )
         )
-        self.assertIsNotNone(re.fullmatch(regex, stdout))
-        self.assertEqual("[WARNING] The given target path does not exists.\n", stderr)
+        self.assertEqual(
+            "[WARNING] Performing dry run, no changes will be done.\n[WARNING] The given target path does not exists.\n",
+            stderr,
+        )
+
+        p = Popen(
+            ["./backup", "--dry-run", "-vvv", "./tests/duplicity.xml", "./BACKUPS"],
+            stdout=PIPE,
+            stderr=PIPE,
+            encoding="utf8",
+        )
+        stdout, stderr = p.communicate()
+        self.assertEqual(p.returncode, 0)
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"Using '[^\']+/BACKUPS' as backup target\.\nLoading XML file \"\./tests/duplicity\.xml\"\.\nLoading XML schema \".*?backup\.xsd\"\.\nXML file \./tests/duplicity\.xml is valid\.\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nBacking up source /\.\nCommand: \"duplicity\" \"--volsize\" \"1024\" \"--full-if-older-than\" \"1D\" \"--exclude=\*\*/\.cache\" \"--exclude=\*\*/venv\" \"--exclude=\*\*/\.venv\" \"--exclude=\*\*/__pycache__\" \"--exclude=\*\*/\.mypy_cache\" \"--include=/var\" \"--exclude=/var/crash\" \"--exclude=/var/log\" \"--exclude=/var/lock\" \"--exclude=/var/run\" \"--exclude=/var/spool\" \"--exclude=/var/tmp\" \"--include=/boot\" \"--include=/etc\" \"--include=/srv\" \"--include=/opt\" \"--include=/root\" \"--include=/home\" \"--exclude=\*\*\" \"/\" \"file://.+?/BACKUPS/.+?/files\"\nEnv: None\nCwd: None\nDry run done\.\n",
+                stdout,
+            )
+        )
+        self.assertEqual(
+            "[WARNING] Performing dry run, no changes will be done.\n[WARNING] The given target path does not exists.\n",
+            stderr,
+        )
 
 
 if __name__ == "__main__":

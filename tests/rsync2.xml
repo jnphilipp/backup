@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<backup xmlns="https://github.com/jnphilipp/backup/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://github.com/jnphilipp/backup/ https://raw.githubusercontent.com/jnphilipp/backup/master/backup.xsd">
+    <tool name="rsync">--delete --delete-excluded --stats --backup-dir=%s -abuchvz</tool>
+    <target>/mnt/BACKUPS</target>
+    <sources>
+        <source>
+            <path>/</path>
+            <exclude>*.pyc</exclude>
+            <exclude>**/.cache</exclude>
+            <exclude>**/venv</exclude>
+            <exclude>**/.venv</exclude>
+            <exclude>**/__pycache__</exclude>
+            <exclude>**/.mypy_cache</exclude>
+            <exclude>**/.local/share/Trash</exclude>
+            <include>/boot/***</include>
+            <include>/etc/***</include>
+            <exclude>/home</exclude>
+            <exclude>/opt</exclude>
+            <exclude>/proc</exclude>
+            <include>/root/***</include>
+            <exclude>/run</exclude>
+            <include>/srv/***</include>
+            <exclude>/tmp</exclude>
+            <exclude>/var/**/logs</exclude>
+            <exclude>/var/cache</exclude>
+            <exclude>/var/crash</exclude>
+            <exclude>/var/log</exclude>
+            <exclude>/var/lock</exclude>
+            <exclude>/var/run</exclude>
+            <exclude>/var/spool</exclude>
+            <exclude>/var/tmp</exclude>
+            <include>/var/***</include>
+            <include>/var/cache/pacman/***</include>
+            <exclude>*</exclude>
+        </source>
+    </sources>
+    <pipeline>
+        <step no="1">backup</step>
+    </pipeline>
+</backup>

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <backup xmlns="https://github.com/jnphilipp/backup/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://github.com/jnphilipp/backup/ https://raw.githubusercontent.com/jnphilipp/backup/master/backup.xsd">
-    <tool name="tar" root="yes">--create --gzip --listed-incremental=%s --verbose</tool>
+    <tool name="tar">--create --gzip --listed-incremental=%s --verbose</tool>
     <sources>
         <file>data.xml</file>
         <source><path>/boot</path></source>

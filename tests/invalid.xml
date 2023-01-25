@@ -4,26 +4,12 @@
     <sources>
         <file>data.xml</file>
         <source><path>/boot</path></source>
-        <source><path>/etc</path></source>
+        <source></source>
         <source>
-            <path>/root</path>
             <exclude>**/.cache</exclude>
             <exclude>**/.dbus</exclude>
             <exclude>**/.gvfs</exclude>
-        </source>
-        <source>
-            <path>/var/</path>
-            <exclude>/crash</exclude>
-            <exclude>/tmp</exclude>
-            <exclude>/log</exclude>
-            <exclude>/spool</exclude>
-        </source>
-        <source>
-            <path>/srv/</path>
-            <exclude>**/venv</exclude>
-            <exclude>**/.venv</exclude>
-            <exclude>**/__pycache__</exclude>
-            <exclude>**/.mypy_cache</exclude>
+            <path>/root</path>
         </source>
     </sources>
     <pipeline>

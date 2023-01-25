@@ -2,8 +2,8 @@
 <backup xmlns="https://github.com/jnphilipp/backup/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://github.com/jnphilipp/backup/ https://raw.githubusercontent.com/jnphilipp/backup/master/backup.xsd">
     <tool name="borg">--verbose --list --stats --show-rc --compression zstd,11 --exclude-caches</tool>
     <sources>
-        <source>
-            <path sshfs="USER@SERVER" sshfs-args="-F /home/USER/.ssh/config">/</path>
+        <source sshfs="USER@SERVER" sshfs-args="-F /home/USER/.ssh/config">
+            <path>/</path>
             <exclude>*.pyc</exclude>
             <exclude>**/.cache</exclude>
             <exclude>**/venv</exclude>

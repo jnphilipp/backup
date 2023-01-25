@@ -29,6 +29,7 @@ class RsyncBackupTests(unittest.TestCase):
             [
                 "./backup",
                 "--is-valid",
+                "-v",
                 "./tests/rsync.xml",
             ],
             stdout=PIPE,
@@ -44,6 +45,27 @@ class RsyncBackupTests(unittest.TestCase):
             [
                 "./backup",
                 "--is-valid",
+                "-vvv",
+                "./tests/rsync2.xml",
+            ],
+            stdout=PIPE,
+            stderr=PIPE,
+            encoding="utf8",
+        )
+        stdout, stderr = p.communicate()
+        self.assertEqual(p.returncode, 0)
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"Loading XML file \"\./tests/rsync2\.xml\"\.\nLoading XML schema \".*?backup\.xsd\"\.\nXML file \./tests/rsync2\.xml is valid\.\nXML file \./tests/rsync2\.xml is valid\.\n",
+                stdout,
+            )
+        )
+        self.assertEqual(stderr, "")
+
+        p = Popen(
+            [
+                "./backup",
+                "--is-valid",
                 "./tests/data.xml",
             ],
             stdout=PIPE,
@@ -52,8 +74,32 @@ class RsyncBackupTests(unittest.TestCase):
         )
         stdout, stderr = p.communicate()
         self.assertEqual(p.returncode, 0)
-        self.assertEqual(stdout, "XML file ./tests/data.xml is valid.\n")
+        self.assertEqual(stdout, "")
         self.assertEqual(stderr, "")
+
+        p = Popen(
+            [
+                "./backup",
+                "--is-valid",
+                "./tests/invalid.xml",
+            ],
+            stdout=PIPE,
+            stderr=PIPE,
+            encoding="utf8",
+        )
+        stdout, stderr = p.communicate()
+        self.assertEqual(p.returncode, 1)
+        self.assertEqual(stdout, "")
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"\[CRITICAL\] XML file \./tests/invalid\.xml is not valid.\n\[CRITICAL\] "
+                + r".+?/invalid\.xml:9:0:ERROR:SCHEMASV:SCHEMAV_ELEMENT_CONTENT: Element "
+                + r"'{https://github\.com/jnphilipp/backup/}exclude': This element is not "
+                + r"expected\. Expected is \( {https://github\.com/jnphilipp/backup/}path "
+                + r"\).\n",
+                stderr,
+            )
+        )
 
     def test_backup(self):
         p = Popen(
@@ -64,59 +110,74 @@ class RsyncBackupTests(unittest.TestCase):
         )
         stdout, stderr = p.communicate()
         self.assertEqual(p.returncode, 0)
-        regex = (
-            r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Using '[^']+' as backup "
-            + r"target\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[ERROR\] The given "
-            + r"target path does not exists\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} "
-            + r"\[INFO\] Backup local source /boot\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,"
-            + r"\d{3} \[INFO\] Backup target .*?/BACKUPS/.*?/files/boot\.\n\d{4}-\d\d-"
-            + r'\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] "sudo" "rsync" "--delete" '
-            + r'"--delete-excluded" "--stats" "--backup-dir=.*?/BACKUPS/.*?/backup/'
-            + r'boot" "-abuchPpzz" "/boot/" ".*?/BACKUPS/.*?/files/boot"\n'
-            + r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] cwd=None\n\d{4}-\d\d-\d\d"
-            + r" \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup local source /etc\.\n"
-            + r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup target "
-            + r".*?/BACKUPS/.*?/files/etc\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} "
-            + r'\[INFO\] "sudo" "rsync" "--delete" "--delete-excluded" "--stats" '
-            + r'"--backup-dir=.*?/BACKUPS/.*?/backup/etc" "-abuchPpzz" "/etc/" '
-            + r'".*?/BACKUPS/.*?/files/etc"\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} '
-            + r"\[INFO\] cwd=None\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup"
-            + r" local source /root\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] "
-            + r"Backup target .*?/BACKUPS/.*?/files/root\.\n\d{4}-\d\d-\d\d "
-            + r'\d\d:\d\d:\d\d,\d{3} \[INFO\] "sudo" "rsync" "--delete" '
-            + r'"--delete-excluded" "--stats" "--backup-dir=.*?/BACKUPS/.*?/backup/'
-            + r'root" "-abuchPpzz" ("--exclude=\*\*/\.gvfs" |"--exclude=\*\*/\.cache" '
-            + r'|"--exclude=\*\*/\.dbus" )+"/root/" ".*?/BACKUPS/.*?/files/root"\n'
-            + r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] cwd=None\n\d{4}-\d\d-\d\d"
-            + r" \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup local source /var\.\n"
-            + r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup target "
-            + r".*?/BACKUPS/.*?/files/var\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} "
-            + r'\[INFO\] "sudo" "rsync" "--delete" "--delete-excluded" "--stats" '
-            + r'"--backup-dir=.*?/BACKUPS/.*?/backup/var" "-abuchPpzz" '
-            + r'("--exclude=/tmp" |"--exclude=/spool" |"--exclude=/log" |'
-            + r'"--exclude=/crash" )+"/var/" ".*?/BACKUPS/.*?/files/var"\n'
-            + r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] cwd=None\n\d{4}-\d\d-\d\d"
-            + r" \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup local source /srv\.\n"
-            + r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup target "
-            + r".*?/BACKUPS/.*?/files/srv\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} "
-            + r'\[INFO\] "sudo" "rsync" "--delete" "--delete-excluded" "--stats" '
-            + r'"--backup-dir=.*?/BACKUPS/.*?/backup/srv" "-abuchPpzz" '
-            + r'("--exclude=\*\*/\.mypy_cache" |"--exclude=\*\*/venv" |'
-            + r'"--exclude=\*\*/\.venv" |"--exclude=\*\*/__pycache__" )+"/srv/" '
-            + r'".*?/BACKUPS/.*?/files/srv"\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} '
-            + r"\[INFO\] cwd=None\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup"
-            + r" local source /run/media/DATA\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} "
-            + r"\[INFO\] Backup target .+?/BACKUPS/.+?/files/run/media\.\n"
-            + r'\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] "sudo" "rsync" "--delete"'
-            + r' "--delete-excluded" "--stats" "--backup-dir=.+?/BACKUPS/.+?/backup/'
-            + r'run/media" "-abuchPpzz" "--exclude=/\.Trash-1000" "/run/media/DATA" '
-            + r'".+?/BACKUPS/.+?/files/run/media"\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3}'
-            + r" \[INFO\] cwd=None\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] "
-            + r"Backup complete\.\n"
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"Using '[^\']+/BACKUPS' as backup target\.\nBacking up source /boot\.\nBacking up source /etc\.\nBacking up source /root\.\nBacking up source /var\.\nBacking up source /srv\.\nBacking up source /run/media/DATA\.\nDry run done\.\n",
+                stdout,
+            )
         )
-        print(stdout)
-        self.assertIsNotNone(re.fullmatch(regex, stdout))
-        self.assertEqual("", stderr)
+        self.assertEqual(
+            "[WARNING] Performing dry run, no changes will be done.\n[WARNING] The given target path does not exists.\n",
+            stderr,
+        )
+
+        p = Popen(
+            ["./backup", "--dry-run", "-vvv", "./tests/rsync.xml", "./BACKUPS"],
+            stdout=PIPE,
+            stderr=PIPE,
+            encoding="utf8",
+        )
+        stdout, stderr = p.communicate()
+        self.assertEqual(p.returncode, 0)
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"Using '[^\']+/BACKUPS' as backup target\.\nLoading XML file \"\./tests/rsync\.xml\"\.\nLoading XML schema \".*?backup\.xsd\"\.\nXML file \./tests/rsync\.xml is valid\.\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nLoading XML file \"tests/data\.xml\"\.\nLoading XML schema \".*?backup\.xsd\"\.\nXML file tests/data\.xml is valid\.\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nBacking up source /boot\.\nCommand: \"rsync\" \"--delete\" \"--delete-excluded\" \"--stats\" \"--backup-dir=.+?/BACKUPS/.+?/backup/boot\" \"-abuchvz\" \"/boot/\" \".+?/BACKUPS/.+?/files/boot\"\nEnv: None\nCwd: None\nBacking up source /etc\.\nCommand: \"rsync\" \"--delete\" \"--delete-excluded\" \"--stats\" \"--backup-dir=.+?/BACKUPS/.+?/backup/etc\" \"-abuchvz\" \"/etc/\" \".+?/BACKUPS/.+?/files/etc\"\nEnv: None\nCwd: None\nBacking up source /root\.\nCommand: \"rsync\" \"--delete\" \"--delete-excluded\" \"--stats\" \"--backup-dir=.+?/BACKUPS/.+?/backup/root\" \"-abuchvz\" \"--exclude=\*\*/\.cache\" \"--exclude=\*\*/\.dbus\" \"--exclude=\*\*/\.gvfs\" \"/root/\" \".+?/BACKUPS/.+?/files/root\"\nEnv: None\nCwd: None\nBacking up source /var\.\nCommand: \"rsync\" \"--delete\" \"--delete-excluded\" \"--stats\" \"--backup-dir=.+?/BACKUPS/.+?/backup/var\" \"-abuchvz\" \"--exclude=/crash\" \"--exclude=/tmp\" \"--exclude=/log\" \"--exclude=/spool\" \"/var/\" \".+?/BACKUPS/.+?/files/var\"\nEnv: None\nCwd: None\nBacking up source /srv\.\nCommand: \"rsync\" \"--delete\" \"--delete-excluded\" \"--stats\" \"--backup-dir=.+?/BACKUPS/.+?/backup/srv\" \"-abuchvz\" \"--exclude=\*\*/venv\" \"--exclude=\*\*/\.venv\" \"--exclude=\*\*/__pycache__\" \"--exclude=\*\*/\.mypy_cache\" \"/srv/\" \".+?/BACKUPS/.+?/files/srv\"\nEnv: None\nCwd: None\nBacking up source /run/media/DATA\.\nCommand: \"rsync\" \"--delete\" \"--delete-excluded\" \"--stats\" \"--backup-dir=.+?/BACKUPS/.+?/backup/run/media/DATA\" \"-abuchvz\" \"--exclude=/.Trash-1000\" \"/run/media/DATA/\" \".+?/BACKUPS/.+?/files/run/media/DATA\"\nEnv: None\nCwd: None\nDry run done\.\n",
+                stdout,
+            )
+        )
+        self.assertEqual(
+            "[WARNING] Performing dry run, no changes will be done.\n[WARNING] The given target path does not exists.\n",
+            stderr,
+        )
+
+        p = Popen(
+            ["./backup", "--dry-run", "-v", "./tests/rsync2.xml", "./BACKUPS"],
+            stdout=PIPE,
+            stderr=PIPE,
+            encoding="utf8",
+        )
+        stdout, stderr = p.communicate()
+        self.assertEqual(p.returncode, 0)
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"Using '[^\']+/BACKUPS' as backup target\.\nBacking up source /\.\nDry run done\.\n",
+                stdout,
+            )
+        )
+        self.assertEqual(
+            "[WARNING] Performing dry run, no changes will be done.\n[WARNING] The given target path does not exists.\n",
+            stderr,
+        )
+
+        p = Popen(
+            ["./backup", "--dry-run", "-vvv", "./tests/rsync2.xml", "./BACKUPS"],
+            stdout=PIPE,
+            stderr=PIPE,
+            encoding="utf8",
+        )
+        stdout, stderr = p.communicate()
+        self.assertEqual(p.returncode, 0)
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"Using '[^\']+/BACKUPS' as backup target\.\nLoading XML file \"\./tests/rsync2\.xml\"\.\nLoading XML schema \".*?backup\.xsd\"\.\nXML file \./tests/rsync2\.xml is valid\.\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nBacking up source /\.\nCommand: \"rsync\" \"--delete\" \"--delete-excluded\" \"--stats\" \"--backup-dir=.+?/BACKUPS/.+?/backup\" \"-abuchvz\" \"--exclude=\*\.pyc\" \"--exclude=\*\*/\.cache\" \"--exclude=\*\*/venv\" \"--exclude=\*\*/\.venv\" \"--exclude=\*\*/__pycache__\" \"--exclude=\*\*/\.mypy_cache\" \"--exclude=\*\*/\.local/share/Trash\" \"--include=/boot/\*\*\*\" \"--include=/etc/\*\*\*\" \"--exclude=/home\" \"--exclude=/opt\" \"--exclude=/proc\" \"--include=/root/\*\*\*\" \"--exclude=/run\" \"--include=/srv/\*\*\*\" \"--exclude=/tmp\" \"--exclude=/var/\*\*/logs\" \"--exclude=/var/cache\" \"--exclude=/var/crash\" \"--exclude=/var/log\" \"--exclude=/var/lock\" \"--exclude=/var/run\" \"--exclude=/var/spool\" \"--exclude=/var/tmp\" \"--include=/var/\*\*\*\" \"--include=/var/cache/pacman/\*\*\*\" \"--exclude=\*\" \"//\" \".+?/BACKUPS/.+?/files\"\nEnv: None\nCwd: None\nDry run done\.\n",
+                stdout,
+            )
+        )
+        self.assertEqual(
+            "[WARNING] Performing dry run, no changes will be done.\n[WARNING] The "
+            "given target path does not exists.\n",
+            stderr,
+        )
 
 
 if __name__ == "__main__":

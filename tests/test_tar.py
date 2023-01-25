@@ -29,6 +29,7 @@ class TarBackupTests(unittest.TestCase):
             [
                 "./backup",
                 "--is-valid",
+                "-v",
                 "./tests/tar.xml",
             ],
             stdout=PIPE,
@@ -52,8 +53,32 @@ class TarBackupTests(unittest.TestCase):
         )
         stdout, stderr = p.communicate()
         self.assertEqual(p.returncode, 0)
-        self.assertEqual(stdout, "XML file ./tests/data.xml is valid.\n")
+        self.assertEqual(stdout, "")
         self.assertEqual(stderr, "")
+
+        p = Popen(
+            [
+                "./backup",
+                "--is-valid",
+                "./tests/invalid.xml",
+            ],
+            stdout=PIPE,
+            stderr=PIPE,
+            encoding="utf8",
+        )
+        stdout, stderr = p.communicate()
+        self.assertEqual(p.returncode, 1)
+        self.assertEqual(stdout, "")
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"\[CRITICAL\] XML file \./tests/invalid\.xml is not valid.\n\[CRITICAL\] "
+                + r".+?/invalid\.xml:9:0:ERROR:SCHEMASV:SCHEMAV_ELEMENT_CONTENT: Element "
+                + r"'{https://github\.com/jnphilipp/backup/}exclude': This element is not "
+                + r"expected\. Expected is \( {https://github\.com/jnphilipp/backup/}path "
+                + r"\).\n",
+                stderr,
+            )
+        )
 
     def test_backup(self):
         p = Popen(
@@ -64,57 +89,40 @@ class TarBackupTests(unittest.TestCase):
         )
         stdout, stderr = p.communicate()
         self.assertEqual(p.returncode, 0)
-        regex = (
-            r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Using '[^']+' as backup "
-            + r"target\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[ERROR\] The given "
-            + r"target path does not exists\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} "
-            + r"\[INFO\] Backup local source /boot\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,"
-            + r"\d{3} \[INFO\] Backup target .*?/BACKUPS/.*?/files\.\n\d{4}-\d\d-\d\d "
-            + r'\d\d:\d\d:\d\d,\d{3} \[INFO\] "sudo" "tar" "--create" "--gzip" '
-            + r'"--listed-incremental=.*?/BACKUPS/.*?/files/boot\.snapshot" "--verbose"'
-            + r' "--file" ".*?/BACKUPS/.*?/files/boot\.0\.tar\.gz" "/boot"\n'
-            + r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] cwd=None\n"
-            + r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup local source "
-            + r"/etc\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup target "
-            + r".*?/BACKUPS/.*?/files\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] "
-            + r'"sudo" "tar" "--create" "--gzip" "--listed-incremental=.*?/BACKUPS/.*?/'
-            + r'files/etc\.snapshot" "--verbose" "--file" ".*?/BACKUPS/.*?/files/'
-            + r'etc\.0\.tar\.gz" "/etc"\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] '
-            + r"cwd=None\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup local "
-            + r"source /root\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup "
-            + r"target .*?/BACKUPS/.*?/files\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} "
-            + r'\[INFO\] "sudo" "tar" "--create" "--gzip" "--listed-incremental=.*?/'
-            + r'BACKUPS/.*?/files/root\.snapshot" "--verbose" ("--exclude=\*\*/\.gvfs" '
-            + r'|"--exclude=\*\*/\.cache" |"--exclude=\*\*/\.dbus" )+"--file" '
-            + r'".*?/BACKUPS/.*?/files/root\.0\.tar\.gz" "/root"\n\d{4}-\d\d-\d\d '
-            + r"\d\d:\d\d:\d\d,\d{3} \[INFO\] cwd=None\n\d{4}-\d\d-\d\d "
-            + r"\d\d:\d\d:\d\d,\d{3} \[INFO\] Backup local source /var\.\n"
-            + r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup target "
-            + r".*?/BACKUPS/.*?/files\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] "
-            + r'"sudo" "tar" "--create" "--gzip" "--listed-incremental=.*?/BACKUPS/.*?'
-            + r'/files/var\.snapshot" "--verbose" ("--exclude=/crash" |"--exclude=/tmp"'
-            + r' |"--exclude=/spool" |"--exclude=/log" )+"--file" ".*?/BACKUPS/.*?/'
-            + r'files/var\.0\.tar\.gz" "/var"\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} '
-            + r"\[INFO\] cwd=None\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] "
-            + r"Backup local source /srv\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} "
-            + r"\[INFO\] Backup target .*?/BACKUPS/.*?/files\.\n\d{4}-\d\d-\d\d "
-            + r'\d\d:\d\d:\d\d,\d{3} \[INFO\] "sudo" "tar" "--create" "--gzip" '
-            + r'"--listed-incremental=.*?/BACKUPS/.*?/files/srv\.snapshot" "--verbose" '
-            + r'("--exclude=\*\*/venv" |"--exclude=\*\*/__pycache__" |'
-            + r'"--exclude=\*\*/\.mypy_cache" |"--exclude=\*\*/\.venv" )+"--file" '
-            + r'".*?/BACKUPS/.*?/files/srv\.0\.tar\.gz" "/srv"\n\d{4}-\d\d-\d\d '
-            + r"\d\d:\d\d:\d\d,\d{3} \[INFO\] cwd=None\n\d{4}-\d\d-\d\d "
-            + r"\d\d:\d\d:\d\d,\d{3} \[INFO\] Backup local source /run/media/DATA\.\n"
-            + r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup target .+?/BACKUPS"
-            + r'/.+?/files/run\.\n\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] "sudo" '
-            + r'"tar" "--create" "--gzip" "--listed-incremental=.+?/BACKUPS/.+?/files/'
-            + r'run/media\.snapshot" "--verbose" "--exclude=/\.Trash-1000" "--file" '
-            + r'".+?/BACKUPS/.+?/files/run/media\.0\.tar\.gz" "/run/media/DATA"\n'
-            + r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} \[INFO\] cwd=None\n\d{4}-\d\d-\d\d"
-            + r" \d\d:\d\d:\d\d,\d{3} \[INFO\] Backup complete\.\n"
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"Using '[^\']+/BACKUPS' as backup target\.\nBacking up source /boot\.\n"
+                + r"Backing up source /etc\.\nBacking up source /root\.\nBacking up source "
+                + r"/var\.\nBacking up source /srv\.\nBacking up source /run/media/DATA\.\n"
+                + r"Dry run done\.\n",
+                stdout,
+            )
         )
-        self.assertIsNotNone(re.fullmatch(regex, stdout))
-        self.assertEqual("", stderr)
+        self.assertEqual(
+            "[WARNING] Performing dry run, no changes will be done.\n[WARNING] The "
+            + "given target path does not exists.\n",
+            stderr,
+        )
+
+        p = Popen(
+            ["./backup", "--dry-run", "-vvv", "./tests/tar.xml", "./BACKUPS"],
+            stdout=PIPE,
+            stderr=PIPE,
+            encoding="utf8",
+        )
+        stdout, stderr = p.communicate()
+        self.assertEqual(p.returncode, 0)
+        self.assertIsNotNone(
+            re.fullmatch(
+                r"Using '[^\']+/BACKUPS' as backup target\.\nLoading XML file \"\./tests/tar\.xml\"\.\nLoading XML schema \".*?backup\.xsd\"\.\nXML file \./tests/tar\.xml is valid\.\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source.\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nLoading XML file \"tests/data\.xml\"\.\nLoading XML schema \".*?backup\.xsd\"\.\nXML file tests/data\.xml is valid\.\nParsing XML element <Element {https://github\.com/jnphilipp/backup/}source at 0x[\w\d]+> for source\.\nBacking up source /boot\.\nCommand: \"tar\" \"--create\" \"--gzip\" \"--listed-incremental=.+?/BACKUPS/.+?/files/boot/boot\.snapshot\" \"--verbose\" \"--file\" \".+?/BACKUPS/.+?/files/boot/boot\.0\.tar\.gz\" \"/boot\"\nEnv: None\nCwd: None\nBacking up source /etc\.\nCommand: \"tar\" \"--create\" \"--gzip\" \"--listed-incremental=.+?/BACKUPS/.+?/files/etc/etc\.snapshot\" \"--verbose\" \"--file\" \".+?/BACKUPS/.+?/files/etc/etc\.0\.tar\.gz\" \"/etc\"\nEnv: None\nCwd: None\nBacking up source /root\.\nCommand: \"tar\" \"--create\" \"--gzip\" \"--listed-incremental=.+?/BACKUPS/.+?/files/root/root\.snapshot\" \"--verbose\" \"--exclude=\*\*/\.cache\" \"--exclude=\*\*/\.dbus\" \"--exclude=\*\*/\.gvfs\" \"--file\" \".+?/BACKUPS/.+?/files/root/root\.0\.tar\.gz\" \"/root\"\nEnv: None\nCwd: None\nBacking up source /var\.\nCommand: \"tar\" \"--create\" \"--gzip\" \"--listed-incremental=.+?/BACKUPS/.+?/files/var/var\.snapshot\" \"--verbose\" \"--exclude=/crash\" \"--exclude=/tmp\" \"--exclude=/log\" \"--exclude=/spool\" \"--file\" \".+?/BACKUPS/.+?/files/var/var\.0\.tar\.gz\" \"/var\"\nEnv: None\nCwd: None\nBacking up source /srv\.\nCommand: \"tar\" \"--create\" \"--gzip\" \"--listed-incremental=.+?/BACKUPS/.+?/files/srv/srv\.snapshot\" \"--verbose\" \"--exclude=\*\*/venv\" \"--exclude=\*\*/\.venv\" \"--exclude=\*\*/__pycache__\" \"--exclude=\*\*/\.mypy_cache\" \"--file\" \".+?/BACKUPS/.+?/files/srv/srv\.0\.tar\.gz\" \"/srv\"\nEnv: None\nCwd: None\nBacking up source /run/media/DATA\.\nCommand: \"tar\" \"--create\" \"--gzip\" \"--listed-incremental=.+?/BACKUPS/.+?/files/run/media/DATA/DATA\.snapshot\" \"--verbose\" \"--exclude=/\.Trash-1000\" \"--file\" \".+?/BACKUPS/.+?/files/run/media/DATA/DATA\.0\.tar\.gz\" \"/run/media/DATA\"\nEnv: None\nCwd: None\nDry run done\.\n",
+                stdout,
+            )
+        )
+        self.assertEqual(
+            "[WARNING] Performing dry run, no changes will be done.\n[WARNING] The "
+            + "given target path does not exists.\n",
+            stderr,
+        )
 
 
 if __name__ == "__main__":

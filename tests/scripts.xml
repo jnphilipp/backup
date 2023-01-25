@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<backup xmlns="https://github.com/jnphilipp/backup/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://github.com/jnphilipp/backup/ https://raw.githubusercontent.com/jnphilipp/backup/master/backup.xsd">
+    <tool name="rsync">--delete --delete-excluded --stats --backup-dir=%s -abuchvz</tool>
+    <target>/mnt/BACKUPS</target>
+    <scripts>
+        <script id="1">systemctl stop postgresql.service</script>
+        <script id="2">systemctl start postgresql.service</script>
+        <script id="3">echo "Hello World"</script>
+        <script id="4">echo "Goodbye!"</script>
+    </scripts>
+    <sources>
+        <source>
+            <path>/</path>
+            <exclude>*.pyc</exclude>
+            <exclude>**/.cache</exclude>
+            <exclude>**/venv</exclude>
+            <exclude>**/.venv</exclude>
+            <exclude>**/__pycache__</exclude>
+            <exclude>**/.mypy_cache</exclude>
+            <exclude>**/.local/share/Trash</exclude>
+            <include>/boot/***</include>
+            <include>/etc/***</include>
+            <exclude>/home</exclude>
+            <exclude>/opt</exclude>
+            <exclude>/proc</exclude>
+            <include>/root/***</include>
+            <exclude>/run</exclude>
+            <include>/srv/***</include>
+            <exclude>/tmp</exclude>
+            <exclude>/var/**/logs</exclude>
+            <exclude>/var/cache</exclude>
+            <exclude>/var/crash</exclude>
+            <exclude>/var/log</exclude>
+            <exclude>/var/lock</exclude>
+            <exclude>/var/run</exclude>
+            <exclude>/var/spool</exclude>
+            <exclude>/var/tmp</exclude>
+            <include>/var/***</include>
+            <include>/var/cache/pacman/***</include>
+            <exclude>*</exclude>
+            <pre_script>1</pre_script>
+            <post_script>2</post_script>
+        </source>
+    </sources>
+    <pipeline>
+        <step no="1">script-3</step>
+        <step no="2">backup</step>
+        <step no="3">script-4</step>
+    </pipeline>
+</backup>

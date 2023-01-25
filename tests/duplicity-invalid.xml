@@ -3,8 +3,9 @@
     <tool name="duplicity">--rsync-options"--delete --delete-excluded --stats -abuchvz"</tool>
     <sources>
         <source>
-            <exclude>**/.cache</exclude>
-            <exclude>**/venv</exclude>
+            <path>/</path>
+            <pattern>**/.cache</pattern>
+            <pattern>**/venv</pattern>
             <exclude>**/.venv</exclude>
             <exclude>**/__pycache__</exclude>
             <exclude>**/.mypy_cache</exclude>
@@ -16,7 +17,6 @@
             <exclude>/var/spool</exclude>
             <include>/etc</include>
             <exclude>**</exclude>
-            <path>/</path>
         </source>
     </sources>
     <pipeline>
