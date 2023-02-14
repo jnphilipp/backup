@@ -821,7 +821,7 @@ if __name__ == "__main__":
 
     if args.log_file:
         file_handler = logging.FileHandler(args.log_file)
-        file_handler.setLevel(15)
+        file_handler.setLevel(logging.DEBUG if logging.DEBUG == level else 15)
         if args.log_file_format:
             file_handler.setFormatter(logging.Formatter(args.log_file_format))
         handlers.append(file_handler)
