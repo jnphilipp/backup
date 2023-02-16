@@ -457,6 +457,10 @@ def make_source_backup_function(
         logging.debug(f"Cwd: {'TEMPDIR' if sshfs else cwd}")
 
         if dry_run:
+            if pre_script is not None:
+                logging.debug('Pre script: "' + '" "'.join(pre_script) + '"')
+            if post_script is not None:
+                logging.debug('Post script: "' + '" "'.join(post_script) + '"')
             return
 
         tmpdir = None
@@ -535,7 +539,7 @@ def timestamp() -> str:
 
 
 def load(
-    path: Union[Path, TextIO], schema_path: str = "/usr/share/backup/backup.xsd"
+    path: Union[Path, TextIO], schema_path: str = "backup.xsd"
 ) -> Optional[etree.ElementTree]:
     """Load XML and check validity.
 
