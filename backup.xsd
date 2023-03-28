@@ -113,9 +113,9 @@
         <xs:sequence>
             <xs:element name="path" type="xs:string"/>
             <xs:choice minOccurs="0" maxOccurs="unbounded">
-                <xs:element name="exclude" type="xs:string"/>
-                <xs:element name="include" type="xs:string"/>
-                <xs:element name="pattern" type="xs:string"/>
+                <xs:element name="exclude" type="xs:string" maxOccurs="unbounded"/>
+                <xs:element name="include" type="xs:string" maxOccurs="unbounded"/>
+                <xs:element name="pattern" type="xs:string" maxOccurs="unbounded"/>
             </xs:choice>
             <xs:element name="pre_script" type="xs:integer" minOccurs="0"/>
             <xs:element name="post_script" type="xs:integer" minOccurs="0"/>
