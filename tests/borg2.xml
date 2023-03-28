@@ -2,9 +2,9 @@
 <backup xmlns="https://github.com/jnphilipp/backup/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://github.com/jnphilipp/backup/ https://raw.githubusercontent.com/jnphilipp/backup/master/backup.xsd">
     <tool name="borg">--verbose --list --stats --show-rc --compression zstd,11 --exclude-caches</tool>
     <sources>
-        <source><path>/boot</path></source>
-        <source><path>/etc</path></source>
-        <source>
+        <source name="laptop"><path>/boot</path></source>
+        <source name="laptop"><path>/etc</path></source>
+        <source name="laptop">
             <path>/home</path>
             <exclude>*.pyc</exclude>
             <exclude>**/.cache</exclude>
@@ -13,10 +13,10 @@
             <exclude>**/__pycache__</exclude>
             <exclude>**/.mypy_cache</exclude>
         </source>
-        <source><path>/opt</path></source>
-        <source><path>/root</path></source>
-        <source><path>/srv</path></source>
-        <source>
+        <source name="laptop"><path>/opt</path></source>
+        <source name="laptop"><path>/root</path></source>
+        <source name="laptop"><path>/srv</path></source>
+        <source name="laptop">
             <path>/var</path>
             <exclude>var/**/logs</exclude>
             <exclude>pp:var/cache</exclude>

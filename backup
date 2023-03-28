@@ -326,10 +326,14 @@ def make_source_backup_function(
         sshfs_server = re.sub("^.+?@", "", elem.attrib["sshfs"])
         if "sshfs-args" in elem.attrib:
             sshfs_args = shlex.split(elem.attrib["sshfs-args"])
-        target /= Path(sshfs_server)
+        target /= Path(elem.attrib["name"] if "name" in elem.attrib else sshfs_server)
     elif "ssh" in elem.attrib:
         ssh = elem.attrib["ssh"]
-        target /= Path(elem.attrib["ssh"])
+        target /= Path(
+            elem.attrib["name"] if "name" in elem.attrib else elem.attrib["ssh"]
+        )
+    elif "name" in elem.attrib:
+        target /= Path(elem.attrib["name"])
     else:
         target /= Path(socket.gethostname())
     backup_dir = target / Path("backup")
@@ -406,16 +410,18 @@ def make_source_backup_function(
 
     if tool == Tool.BORG:
         if sshfs is not None:
+            name = elem.attrib["name"] if "name" in elem.attrib else sshfs_server
             if path.name == "":
-                backup_name = f"{sshfs_server}-{{now}}"
+                backup_name = f"{name}-{{now}}"
             else:
-                backup_name = f"{sshfs_server}:{path.name}-{{now}}"
+                backup_name = f"{name}:{path.name}-{{now}}"
             args += [f"{target.absolute()}::{backup_name}", "."]
         else:
+            name = elem.attrib["name"] if "name" in elem.attrib else "{hostname}"
             if path.name == "":
-                backup_name = "{hostname}-{now}"
+                backup_name = f"{name}-{{now}}"
             else:
-                backup_name = f"{{hostname}}:{path.name}-{{now}}"
+                backup_name = f"{name}:{path.name}-{{now}}"
             args += [f"{target.absolute()}::{backup_name}", str(path)]
         args = [args[0], "create"] + args[1:]
     elif tool == Tool.DUPLICITY:

@@ -120,6 +120,7 @@
             <xs:element name="pre_script" type="xs:integer" minOccurs="0"/>
             <xs:element name="post_script" type="xs:integer" minOccurs="0"/>
         </xs:sequence>
+        <xs:attribute name="name" type="xs:string" use="optional"/>
         <xs:attribute name="ssh" type="xs:string" use="optional"/>
         <xs:attribute name="sshfs" type="xs:string" use="optional"/>
         <xs:attribute name="sshfs-args" type="xs:string" use="optional"/>
