@@ -545,7 +545,7 @@ def timestamp() -> str:
 
 
 def load(
-    path: Union[Path, TextIO], schema_path: str = "backup.xsd"
+    path: Union[Path, TextIO], schema_path: str = "/usr/share/backup/backup.xsd"
 ) -> Optional[etree.ElementTree]:
     """Load XML and check validity.
 
